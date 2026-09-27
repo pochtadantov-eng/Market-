@@ -41,13 +41,45 @@ export default {
       if (auth.error) return json({ error: auth.error }, 401);
       const user = auth.user;
       const isAdmin = adminIds(env).includes(String(user.id));
+      const me = await touchUser(env, user);
+      if (me.banned && !isAdmin) return json({ error: "Доступ к магазину закрыт", banned: true }, 403);
 
       if (request.method === "GET" && path === "/me") {
-        const balance = Number(await env.DB.get("bal:" + user.id)) || 0;
-        return json({ id: user.id, username: user.username || null, isAdmin, balance });
+        return json({ id: user.id, username: user.username || null, isAdmin, balance: me.balance || 0 });
       }
 
       if (!isAdmin) return json({ error: "Нет доступа" }, 403);
+
+      // Пользователи: список и поиск по ID, @username или имени
+      if (request.method === "GET" && path === "/admin/users") {
+        const q = String(url.searchParams.get("q") || "").trim().replace(/^@/, "").toLowerCase();
+        if (/^\d+$/.test(q)) {
+          const u = await getUser(env, q);
+          return json({ users: u ? [u] : [{ id: Number(q), username: null, name: "", balance: 0, banned: false, unknown: true }] });
+        }
+        const ids = ((await env.DB.get("users", "json")) || []).slice(0, q ? 500 : 100);
+        let users = (await Promise.all(ids.map((id) => getUser(env, id)))).filter(Boolean);
+        if (q) users = users.filter((u) => (u.username || "").toLowerCase().includes(q) || (u.name || "").toLowerCase().includes(q));
+        return json({ users: users.slice(0, 100) });
+      }
+
+      const um = path.match(/^\/admin\/users\/(\d+)\/(balance|ban)$/);
+      if (request.method === "POST" && um) {
+        const body = await request.json().catch(() => ({}));
+        const u = (await getUser(env, um[1])) || newUser({ id: Number(um[1]) });
+        if (um[2] === "balance") {
+          const amount = Math.round(Number(body.amount) * 100) / 100;
+          if (!isFinite(amount) || Math.abs(amount) > 1e9) return json({ error: "Неверная сумма" }, 400);
+          const next = body.mode === "add" ? (u.balance || 0) + amount : amount;
+          if (next < 0) return json({ error: "Баланс не может быть меньше нуля" }, 400);
+          u.balance = Math.round(next * 100) / 100;
+        } else {
+          if (adminIds(env).includes(String(u.id))) return json({ error: "Админа забанить нельзя" }, 400);
+          u.banned = !!body.banned;
+        }
+        await saveUser(env, u, true);
+        return json({ ok: true, user: u });
+      }
 
       if (request.method === "POST" && path === "/admin/gifts") {
         const body = await request.json().catch(() => ({}));
@@ -73,6 +105,45 @@ export default {
     }
   },
 };
+
+function newUser(tgUser) {
+  return { id: tgUser.id, username: tgUser.username || null, name: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" "), balance: 0, banned: false, first_seen: Date.now(), last_seen: Date.now() };
+}
+
+async function getUser(env, id) {
+  return env.DB.get("u:" + id, "json");
+}
+
+async function saveUser(env, u, addToIndex) {
+  await env.DB.put("u:" + u.id, JSON.stringify(u));
+  if (addToIndex) {
+    const ids = (await env.DB.get("users", "json")) || [];
+    if (!ids.includes(u.id)) {
+      ids.unshift(u.id);
+      await env.DB.put("users", JSON.stringify(ids.slice(0, 5000)));
+    }
+  }
+}
+
+// Запоминаем пользователя. Пишем в KV редко: бесплатный тариф даёт 1000 записей в день.
+async function touchUser(env, tgUser) {
+  let u = await getUser(env, tgUser.id);
+  if (!u) {
+    u = newUser(tgUser);
+    const oldBal = Number(await env.DB.get("bal:" + tgUser.id)) || 0;
+    if (oldBal) u.balance = oldBal;
+    await saveUser(env, u, true);
+    return u;
+  }
+  const name = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ");
+  if (u.username !== (tgUser.username || null) || u.name !== name || Date.now() - (u.last_seen || 0) > 6 * 3600 * 1000) {
+    u.username = tgUser.username || null;
+    u.name = name;
+    u.last_seen = Date.now();
+    await saveUser(env, u, false);
+  }
+  return u;
+}
 
 function adminIds(env) {
   return String(env.ADMIN_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);

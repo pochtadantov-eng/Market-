@@ -67,6 +67,27 @@ button.rate{cursor:pointer;padding:5px 8px 5px 12px}
 .aitem small{color:var(--muted);font-size:12px}
 .aitem button{border:1px solid var(--line);background:none;color:var(--muted);border-radius:10px;padding:6px 10px;font-size:13px}
 .aitem button.sure{border-color:#E5484D;color:#E5484D}
+.tab[aria-selected="true"][data-tab="admin"] svg{color:var(--ok)}
+.topup-tabs.two{grid-template-columns:1fr 1fr}
+.usearch{border:0;background:var(--ton);color:#fff;border-radius:10px;padding:7px 12px;font-weight:600;margin-right:-6px}
+.urow{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.urow.is-banned{border-color:rgba(229,72,77,.5)}
+.utop{display:flex;align-items:center;gap:10px}
+.utop div{flex:1;min-width:0}
+.utop b{display:block;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.utop small{color:var(--muted);font-size:12px}
+.ubal{font-weight:700;white-space:nowrap}
+.ubtns{display:flex;gap:6px}
+.ubtns button{flex:1;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:7px 4px;font-size:13px;font-weight:600}
+.ubtns .ban{color:#E5484D}
+.ubtns .unban{color:var(--ok)}
+.uedit{display:flex;gap:6px}
+.uedit input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;outline:none}
+.uedit button{border:0;border-radius:10px;padding:8px 10px;font-weight:600;font-size:13px;background:var(--ton);color:#fff}
+.uedit button.alt{background:var(--surface-2);color:var(--text);border:1px solid var(--line)}
+.banned{position:fixed;inset:0;z-index:50;background:var(--bg);display:grid;place-items:center;padding:24px;text-align:center}
+.banned b{font:700 22px/1.2 var(--display);display:block;margin-bottom:8px}
+.banned p{color:var(--muted);margin:0}
 .rate b{color:var(--text);font-weight:600}
 
 /* section head */
@@ -155,7 +176,7 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 
 /* tab bar */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:#0B1019;border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
-.tabs nav{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.tabs nav{max-width:520px;margin:0 auto;display:grid;grid-auto-flow:column;grid-auto-columns:1fr}
 .tab{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--faint);font-size:11.5px;font-weight:600;position:relative}
 .tab svg{width:24px;height:24px}
 .tab[aria-selected="true"]{color:var(--text)}
@@ -257,8 +278,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
 
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 </style>
-</head>
-<body>
+</head><body>
 
 <div class="app">
   <header class="top">
@@ -271,7 +291,6 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   <section id="p-nft" role="tabpanel">
     <h1>NFT-подарки</h1>
     <p class="lead">Настоящие улучшенные подарки Telegram. Нажмите на подарок, чтобы увидеть анимацию. После оплаты он придёт на ваш аккаунт.</p>
-    <button class="admin-btn" id="adminBtn" hidden>Админка: добавить подарок</button>
     <div class="chips" id="nftChips">
       <button class="chip" data-f="all" aria-pressed="true">Все</button>
       <button class="chip" data-f="rare" aria-pressed="false">Редкие</button>
@@ -358,6 +377,36 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     </ul>
     <button class="notify" id="notify" aria-pressed="false">Сообщить о запуске</button>
   </section>
+
+  <!-- ADMIN: видно только тем, кого сервер признал админом -->
+  <section id="p-admin" role="tabpanel" hidden>
+    <h1>Админ-панель</h1>
+    <p class="lead">Видна только вам. Всё, что меняете здесь, сразу видят покупатели.</p>
+    <div class="topup-tabs two" id="admTabs">
+      <button data-a="gifts" aria-pressed="true">Подарки</button>
+      <button data-a="users" aria-pressed="false">Пользователи</button>
+    </div>
+    <div id="admGifts">
+      <form id="aForm" class="aform" novalidate>
+        <label class="field"><input id="aLink" placeholder="Ссылка: t.me/nft/PlushPepe-1843" autocomplete="off"></label>
+        <div class="arow">
+          <label class="field"><input id="aPrice" class="num" inputmode="decimal" placeholder="Цена, TON" autocomplete="off"></label>
+          <label class="field"><input id="aName" placeholder="Название (необяз.)" autocomplete="off"></label>
+        </div>
+        <div class="arow checks">
+          <label><input type="checkbox" id="aRare"> Редкий</label>
+          <label><input type="checkbox" id="aNew"> Новый</label>
+        </div>
+        <button class="pay" id="aAdd" type="submit">Добавить в магазин</button>
+      </form>
+      <div class="label">В магазине</div>
+      <div class="alist" id="aList"></div>
+    </div>
+    <div id="admUsers" hidden>
+      <form class="field" id="uSearchForm"><input id="uSearch" placeholder="ID, @username или имя" autocomplete="off"><button class="usearch" type="submit">Найти</button></form>
+      <div class="alist" id="uList"><p class="empty">Загрузка…</p></div>
+    </div>
+  </section>
 </div>
 
 <div class="buy" id="buyBar" hidden><button id="buyBtn"><span id="buyLabel">Купить</span><span id="buyPrice" class="num"></span></button></div>
@@ -367,6 +416,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   <button class="tab" role="tab" data-tab="stars" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>Stars</button>
   <button class="tab" role="tab" data-tab="ton" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M5.5 5h13c1 0 1.6 1 1.1 1.9L13 19.3a1.2 1.2 0 0 1-2 0L4.4 6.9C3.9 6 4.5 5 5.5 5ZM12 5v14"/></svg>TON</button>
   <button class="tab" role="tab" data-tab="premium" aria-selected="false"><span class="badge">скоро</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 8l4 3 4-6 4 6 4-3-1.5 10h-13z"/></svg>Premium</button>
+  <button class="tab" role="tab" data-tab="admin" aria-selected="false" id="adminTab" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.4 3.1 8.2 7.5 9.5 4.4-1.3 7.5-5.1 7.5-9.5V6z"/><path d="m9 12 2 2 4-4"/></svg>Админ</button>
 </nav></div>
 
 <div class="scrim" id="scrim"></div>
@@ -403,26 +453,9 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   <p class="tid" id="tSrv"></p>
 </div></div>
 
-<div class="scrim" id="aScrim"></div>
-<div class="sheet" id="aSheet" role="dialog" aria-modal="true" aria-labelledby="aTitle"><div class="in">
-  <div class="grab"></div>
-  <h2 id="aTitle">Админка</h2>
-  <form id="aForm" class="aform" novalidate>
-    <label class="field"><input id="aLink" placeholder="Ссылка: t.me/nft/PlushPepe-1843" autocomplete="off"></label>
-    <div class="arow">
-      <label class="field"><input id="aPrice" class="num" inputmode="decimal" placeholder="Цена, TON" autocomplete="off"></label>
-      <label class="field"><input id="aName" placeholder="Название (необяз.)" autocomplete="off"></label>
-    </div>
-    <div class="arow checks">
-      <label><input type="checkbox" id="aRare"> Редкий</label>
-      <label><input type="checkbox" id="aNew"> Новый</label>
-    </div>
-    <button class="pay" id="aAdd" type="submit">Добавить в магазин</button>
-  </form>
-  <div class="label">В магазине</div>
-  <div class="alist" id="aList"></div>
-  <button class="ghost" id="aClose">Закрыть</button>
-</div></div>
+<div class="banned" id="bannedScreen" hidden>
+  <div><b>Доступ закрыт</b><p>Администратор ограничил вам доступ к магазину.</p></div>
+</div>
 
 <div class="toast" id="toast" role="status"></div>
 
@@ -487,7 +520,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   }
   function api(method,path,body){
     return fetch(API+path,{method:method,cache:"no-store",headers:{"Content-Type":"application/json","X-Init-Data":(tg&&tg.initData)||""},body:body?JSON.stringify(body):undefined})
-      .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok)throw new Error(d.error||("Ошибка "+r.status));return d})});
+      .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok){var e=new Error(d.error||("Ошибка "+r.status));e.data=d;throw e}return d})});
   }
   var ADMIN=false,ME=null;
   function srv(t){$("tSrv").textContent=t}
@@ -501,8 +534,10 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
       ME=me;BALANCE=me.balance||0;$("balVal").textContent=fmt(BALANCE)+" ₽";
       $("tId").textContent="Ваш Telegram ID: "+me.id;
       srv("Сервер: подключён"+(me.isAdmin?" · вы админ":" · вы не в ADMIN_IDS"));
-      if(me.isAdmin){ADMIN=true;$("adminBtn").hidden=false}
-    }).catch(function(err){srv("Сервер: ошибка. "+(err&&err.message||"нет связи"))});
+      if(me.isAdmin){ADMIN=true;$("adminTab").hidden=false}
+    }).catch(function(err){
+      if(err&&err.data&&err.data.banned){$("bannedScreen").hidden=false;try{tg.MainButton.hide()}catch(e){}return}
+      srv("Сервер: ошибка. "+(err&&err.message||"нет связи"))});
   }
 
 
@@ -710,7 +745,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
         if(w.length<20){toast("Вставьте адрес кошелька TON");$("tonWallet").focus();return}
         openSheet([["Товар",fmt(v,2)+" TON"],["Кошелёк",w.slice(0,6)+"…"+w.slice(-4)],["Курс","1 TON = "+fmt(RATE)+" ₽"]],price,null);
       }}
-    var show=!!label&&!$("sheet").classList.contains("on")&&!$("tSheet").classList.contains("on")&&!$("aSheet").classList.contains("on");
+    var show=!!label&&!$("sheet").classList.contains("on")&&!$("tSheet").classList.contains("on");
     if(tg&&tg.MainButton&&tg.platform!=="unknown"){
       try{
         if(show){tg.MainButton.setParams({text:label+(price?" · "+price:""),color:gold?"#F6B940":"#1AA3F0",text_color:gold?"#231800":"#FFFFFF",is_visible:true})}
@@ -782,15 +817,56 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     haptic("medium");closeTop();toast("Демо: пополнение на "+fmt(v)+" "+c.unit+" пока не подключено");
   });
   /* Админка: видна только тем, кого сервер признал админом */
-  function openAdmin(){renderAdminList();$("aScrim").classList.add("on");$("aSheet").classList.add("on");updateBuy()}
-  function closeAdmin(){$("aScrim").classList.remove("on");$("aSheet").classList.remove("on");updateBuy()}
   function renderAdminList(){
     $("aList").innerHTML=GIFTS.length?GIFTS.map(function(g){
       return '<div class="aitem"><img alt="" src="'+FRAG+g.slug+"-"+g.no+'.webp" onerror="this.style.visibility=\'hidden\'"><div><b>'+escapeHtml(g.n)+' #'+g.no+'</b><small class="num">'+fmt(g.p,2)+' TON'+(g.rare?' · редкий':'')+(g.isNew?' · новый':'')+'</small></div><button type="button" data-del="'+g.slug+"-"+g.no+'">Удалить</button></div>';
     }).join(""):'<p class="empty">Пока пусто</p>';
   }
-  $("adminBtn").addEventListener("click",openAdmin);
-  $("aScrim").addEventListener("click",closeAdmin);$("aClose").addEventListener("click",closeAdmin);
+  $("admTabs").addEventListener("click",function(e){
+    var b=e.target.closest("button");if(!b)return;haptic("sel");
+    [].forEach.call(this.children,function(c){c.setAttribute("aria-pressed",c===b)});
+    $("admGifts").hidden=b.dataset.a!=="gifts";$("admUsers").hidden=b.dataset.a!=="users";
+    if(b.dataset.a==="users")loadUsers();
+  });
+  /* Пользователи: баланс и бан */
+  var USERS=[];
+  function loadUsers(q){
+    $("uList").innerHTML='<p class="empty">Загрузка…</p>';
+    api("GET","/admin/users"+(q?"?q="+encodeURIComponent(q):"")).then(function(d){USERS=d.users||[];renderUsers()})
+      .catch(function(err){$("uList").innerHTML='<p class="empty">'+escapeHtml(err.message)+'</p>'});
+  }
+  function renderUsers(){
+    $("uList").innerHTML=USERS.length?USERS.map(function(u,i){
+      return '<div class="urow'+(u.banned?' is-banned':'')+'" data-i="'+i+'"><div class="utop"><div><b>'+escapeHtml(u.name||("ID "+u.id))+(u.banned?' · забанен':'')+'</b>'+
+        '<small class="num">'+(u.username?'@'+escapeHtml(u.username)+' · ':'')+'ID '+u.id+(u.unknown?' · ещё не заходил':'')+'</small></div>'+
+        '<span class="ubal num">'+fmt(u.balance||0,2)+' ₽</span></div>'+
+        '<div class="ubtns"><button type="button" data-act="bal">Баланс</button>'+
+        '<button type="button" data-act="ban" class="'+(u.banned?'unban':'ban')+'">'+(u.banned?'Разбанить':'Забанить')+'</button></div></div>';
+    }).join(""):'<p class="empty">Никого не нашли. Пользователь появляется здесь, когда впервые откроет магазин.</p>';
+  }
+  function saveUser(i,u){USERS[i]=Object.assign(USERS[i],u,{unknown:false});renderUsers()}
+  $("uSearchForm").addEventListener("submit",function(e){e.preventDefault();loadUsers($("uSearch").value.trim())});
+  $("uList").addEventListener("click",function(e){
+    var b=e.target.closest("button");if(!b)return;
+    var row=b.closest(".urow"),i=+row.dataset.i,u=USERS[i];
+    if(b.dataset.act==="bal"){
+      var ed=row.querySelector(".uedit");if(ed){ed.remove();return}
+      row.insertAdjacentHTML("beforeend",'<div class="uedit"><input class="num" inputmode="decimal" placeholder="Сумма, ₽"><button type="button" data-act="set">Установить</button><button type="button" class="alt" data-act="add">Прибавить</button></div>');
+      row.querySelector(".uedit input").focus();return;
+    }
+    if(b.dataset.act==="set"||b.dataset.act==="add"){
+      var v=parseFloat(String(row.querySelector(".uedit input").value).replace(",","."));
+      if(!isFinite(v)){toast("Введите сумму");return}
+      api("POST","/admin/users/"+u.id+"/balance",{amount:v,mode:b.dataset.act}).then(function(d){haptic("medium");saveUser(i,d.user);toast("Баланс: "+fmt(d.user.balance,2)+" ₽");
+        if(ME&&d.user.id===ME.id){BALANCE=d.user.balance;$("balVal").textContent=fmt(BALANCE)+" ₽"}})
+        .catch(function(err){toast(err.message)});return;
+    }
+    if(b.dataset.act==="ban"){
+      if(!u.banned&&!b.classList.contains("sure")){b.classList.add("sure");b.textContent="Точно забанить?";setTimeout(function(){if(b.isConnected){b.classList.remove("sure");b.textContent="Забанить"}},3000);return}
+      api("POST","/admin/users/"+u.id+"/ban",{banned:!u.banned}).then(function(d){haptic("medium");saveUser(i,d.user);toast(d.user.banned?"Пользователь забанен":"Пользователь разбанен")})
+        .catch(function(err){toast(err.message)});
+    }
+  });
   $("aForm").addEventListener("submit",function(e){
     e.preventDefault();
     var body={link:$("aLink").value.trim(),price_ton:parseFloat(String($("aPrice").value).replace(",",".")),name:$("aName").value.trim(),rare:$("aRare").checked,new:$("aNew").checked};
@@ -868,7 +944,8 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   function setTab(t){
     state.tab=t;
     document.querySelectorAll(".tab").forEach(function(b){b.setAttribute("aria-selected",b.dataset.tab===t)});
-    ["nft","stars","ton","premium"].forEach(function(k){$("p-"+k).hidden=k!==t});
+    ["nft","stars","ton","premium","admin"].forEach(function(k){$("p-"+k).hidden=k!==t});
+    if(t==="admin")renderAdminList();
     window.scrollTo(0,0);updateBuy();
   }
   document.querySelector(".tabs nav").addEventListener("click",function(e){
@@ -883,5 +960,4 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   setTab(["nft","stars","ton","premium"].indexOf(h)>-1?h:"nft");
 })();
 </script>
-</body>
-</html>
+</body></html>
