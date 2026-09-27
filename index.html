@@ -66,6 +66,8 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 .gift .model{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .price{display:inline-flex;align-items:center;gap:5px;font-weight:700;margin-top:6px;font-size:15px}
 .ton-ic{width:15px;height:15px;flex:none}
+.tonsub{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);margin-top:1px}
+.tonsub .ton-ic{width:12px;height:12px}
 .star-ic{width:15px;height:15px;flex:none}
 
 /* stars */
@@ -244,7 +246,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     <div class="chips" id="nftChips">
       <button class="chip" data-f="all" aria-pressed="true">Все</button>
       <button class="chip" data-f="rare" aria-pressed="false">Редкие</button>
-      <button class="chip" data-f="cheap" aria-pressed="false">До 10 TON</button>
+      <button class="chip" data-f="cheap" aria-pressed="false">До 1 500 ₽</button>
       <button class="chip" data-f="new" aria-pressed="false">Новые</button>
     </div>
     <div class="grid" id="nftGrid"></div>
@@ -436,11 +438,15 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   }
 
   /* Курс TON */
+  // цены NFT хранятся в TON, показываем в рублях по текущему курсу
+  function giftRub(g){return MARKET?fmt(Math.round(g.p*MARKET))+" ₽":fmt(g.p,1)+" TON"}
+  function updGiftPrices(){[].forEach.call(document.querySelectorAll(".price[data-p]"),function(el){el.textContent=giftRub(GIFTS[+el.dataset.p])})}
   function applyRate(market,ts){
     MARKET=market;RATE=Math.floor(market*(1-TON_DISCOUNT));
     $("rateVal").textContent=fmt(RATE)+" ₽";$("rateDot").style.background="";
     $("tonMarket").textContent=fmt(MARKET,2)+" ₽";
     $("tonOur").textContent=fmt(RATE)+" ₽";
+    updGiftPrices();
     $("tonUpd").textContent=new Date(ts).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
     updTon();
   }
@@ -470,7 +476,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   /* NFT */
   function renderGifts(){
     var list=GIFTS.filter(function(g){
-      return state.filter==="all"||(state.filter==="rare"&&g.rare)||(state.filter==="cheap"&&g.p<=10)||(state.filter==="new"&&g.isNew);
+      return state.filter==="all"||(state.filter==="rare"&&g.rare)||(state.filter==="cheap"&&(MARKET?g.p*MARKET<=1500:g.p<=10))||(state.filter==="new"&&g.isNew);
     });
     $("nftGrid").innerHTML=list.map(function(g,k){
       var i=GIFTS.indexOf(g);
@@ -479,7 +485,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
         '<span class="no num">#'+fmt(g.no)+'</span>'+(g.rare?'<span class="rar">RARE</span>':'')+
         artImg(g)+'<span class="glyph" aria-hidden="true">'+g.g+'</span>'+sparks(6)+'</div>'+
         '<div class="meta"><span class="name">'+g.n+'</span><span class="model">Коллекция Telegram</span>'+
-        '<span class="price num">'+TON_SVG+fmt(g.p,1)+'</span></div></button>';
+        '<span class="price num" data-p="'+i+'">'+giftRub(g)+'</span><span class="tonsub num">'+TON_SVG+fmt(g.p,1)+' TON</span></div></button>';
     }).join("");
     if(io)[].forEach.call($("nftGrid").querySelectorAll(".art"),function(a){io.observe(a)});
   }
@@ -493,7 +499,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     var b=e.target.closest(".gift");if(!b)return;
     haptic();var g=GIFTS[+b.dataset.i];
     openSheet([["Подарок",g.n+" #"+fmt(g.no)],["Модель","…","aModel"],["Фон","…","aBack"],["Узор","…","aSym"],["Владелец",g.owner||SHOP_OWNER],["Получатель","ваш аккаунт"]],
-      fmt(g.p,1)+" TON",MARKET?fmt(g.p*MARKET)+" ₽":null,g);
+      giftRub(g),fmt(g.p,1)+" TON",g);
   });
 
   /* Stars */
