@@ -9,6 +9,7 @@
 //   ALLOWED_ORIGIN  (необязательно) адрес мини-приложения, по умолчанию https://pochtadantov-eng.github.io
 
 const MAX_AUTH_AGE = 24 * 60 * 60; // initData действительна сутки
+const FLOOR_DISCOUNT = 0.2; // цена подарка = флор минус 20%
 
 export default {
   async fetch(request, env) {
@@ -81,6 +82,15 @@ export default {
         return json({ ok: true, user: u });
       }
 
+      // Флор коллекции с маркета Fragment, цена = флор минус 20%
+      if (request.method === "GET" && path === "/admin/floor") {
+        const m = String(url.searchParams.get("link") || "").match(/nft\/([A-Za-z0-9]+)-\d+/);
+        if (!m) return json({ error: "Нужна ссылка вида t.me/nft/PlushPepe-1843" }, 400);
+        const floor = await fragmentFloor(m[1].toLowerCase());
+        if (!floor) return json({ error: "Не удалось узнать флор, введите цену вручную" }, 502);
+        return json({ floor, price_ton: Math.round(floor * (1 - FLOOR_DISCOUNT) * 100) / 100 });
+      }
+
       if (request.method === "POST" && path === "/admin/gifts") {
         const body = await request.json().catch(() => ({}));
         const gift = parseGift(body);
@@ -143,6 +153,19 @@ async function touchUser(env, tgUser) {
     await saveUser(env, u, false);
   }
   return u;
+}
+
+// Самая низкая цена среди выставленных на продажу подарков коллекции на fragment.com
+async function fragmentFloor(slug) {
+  const res = await fetch("https://fragment.com/gifts/" + slug + "?sort=price_asc&filter=sale", {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36", "Accept-Language": "en" },
+  });
+  if (!res.ok) return null;
+  const html = await res.text();
+  const prices = [...html.matchAll(/icon-ton[^"]*"[^>]*>\s*([\d,]+(?:\.\d+)?)\s*</g)]
+    .map((x) => Number(x[1].replace(/,/g, "")))
+    .filter((n) => n > 0);
+  return prices.length ? Math.min(...prices) : null;
 }
 
 function adminIds(env) {

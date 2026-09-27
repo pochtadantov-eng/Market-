@@ -399,6 +399,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
         </div>
         <button class="pay" id="aAdd" type="submit">Добавить в магазин</button>
       </form>
+      <p class="lead" id="aFloor" hidden></p>
       <div class="label">В магазине</div>
       <div class="alist" id="aList"></div>
     </div>
@@ -867,6 +868,19 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
         .catch(function(err){toast(err.message)});
     }
   });
+  /* Цена по флору Fragment минус 20%, подставляется сама после вставки ссылки */
+  var floorFor="";
+  function checkFloor(){
+    var link=$("aLink").value.trim(),m=link.match(/nft\/[A-Za-z0-9]+-\d+/);
+    if(!m||m[0]===floorFor)return;floorFor=m[0];
+    var box=$("aFloor");box.hidden=false;box.textContent="Смотрю флор на Fragment…";
+    api("GET","/admin/floor?link="+encodeURIComponent(link)).then(function(d){
+      if(floorFor!==m[0])return;
+      $("aPrice").value=String(d.price_ton).replace(".",",");haptic("sel");
+      box.textContent="Флор "+fmt(d.floor,2)+" TON, цена −20%: "+fmt(d.price_ton,2)+" TON";
+    }).catch(function(err){if(floorFor===m[0]){box.textContent=err.message;floorFor=""}});
+  }
+  $("aLink").addEventListener("input",checkFloor);$("aLink").addEventListener("change",checkFloor);
   $("aForm").addEventListener("submit",function(e){
     e.preventDefault();
     var body={link:$("aLink").value.trim(),price_ton:parseFloat(String($("aPrice").value).replace(",",".")),name:$("aName").value.trim(),rare:$("aRare").checked,new:$("aNew").checked};
@@ -875,7 +889,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     $("aAdd").disabled=true;
     api("POST","/admin/gifts",body).then(function(d){
       haptic("medium");useGiftList(d.gifts);toast("Подарок добавлен");
-      $("aLink").value="";$("aPrice").value="";$("aName").value="";$("aRare").checked=false;$("aNew").checked=false;
+      $("aLink").value="";$("aPrice").value="";$("aFloor").hidden=true;floorFor="";$("aName").value="";$("aRare").checked=false;$("aNew").checked=false;
     }).catch(function(err){toast(err.message)}).then(function(){$("aAdd").disabled=false});
   });
   $("aList").addEventListener("click",function(e){
