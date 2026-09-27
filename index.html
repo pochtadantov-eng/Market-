@@ -52,6 +52,21 @@ button.rate{cursor:pointer;padding:5px 8px 5px 12px}
 .topup-quick button{border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:9px 0;font-weight:600;font-size:14px}
 .crypto-box{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;font-size:14.5px;line-height:1.5}
 .crypto-box b{color:var(--ton)}
+.tid{text-align:center;color:var(--faint);font-size:12px;margin:0}
+.empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:30px 0}
+.admin-btn{width:100%;margin-bottom:12px;border:1px dashed var(--ton);background:var(--ton-soft);color:var(--ton);border-radius:14px;padding:11px;font-weight:600}
+.aform .field{margin-bottom:8px}
+.arow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.arow.checks{display:flex;gap:18px;margin:4px 2px 12px;color:var(--muted);font-size:14px}
+.arow.checks input{accent-color:var(--ton);margin-right:6px}
+.alist{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.aitem{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.aitem img{width:36px;height:36px;border-radius:8px;flex:none;background:var(--surface-2)}
+.aitem div{flex:1;min-width:0}
+.aitem b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aitem small{color:var(--muted);font-size:12px}
+.aitem button{border:1px solid var(--line);background:none;color:var(--muted);border-radius:10px;padding:6px 10px;font-size:13px}
+.aitem button.sure{border-color:#E5484D;color:#E5484D}
 .rate b{color:var(--text);font-weight:600}
 
 /* section head */
@@ -160,7 +175,7 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 .scrim.on{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--surface);border-radius:22px 22px 0 0;border-top:1px solid var(--line);padding:10px 16px calc(18px + env(safe-area-inset-bottom,0px));transform:translateY(105%);transition:transform .25s ease}
 .sheet.on{transform:none}
-.sheet{max-height:92vh;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain}
+.sheet{max-height:92vh;max-height:92dvh;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
 .sheet .in{max-width:488px;margin:0 auto}
 .grab{width:40px;height:4px;border-radius:4px;background:var(--line);margin:0 auto 14px}
 .sheet h2{font:700 18px/1.2 var(--display);margin:0 0 12px}
@@ -256,6 +271,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   <section id="p-nft" role="tabpanel">
     <h1>NFT-подарки</h1>
     <p class="lead">Настоящие улучшенные подарки Telegram. Нажмите на подарок, чтобы увидеть анимацию. После оплаты он придёт на ваш аккаунт.</p>
+    <button class="admin-btn" id="adminBtn" hidden>Админка: добавить подарок</button>
     <div class="chips" id="nftChips">
       <button class="chip" data-f="all" aria-pressed="true">Все</button>
       <button class="chip" data-f="rare" aria-pressed="false">Редкие</button>
@@ -383,6 +399,28 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     <button class="pay" id="tDm">Написать в личку</button>
   </div>
   <button class="ghost" id="tClose">Закрыть</button>
+  <p class="tid num" id="tId"></p>
+</div></div>
+
+<div class="scrim" id="aScrim"></div>
+<div class="sheet" id="aSheet" role="dialog" aria-modal="true" aria-labelledby="aTitle"><div class="in">
+  <div class="grab"></div>
+  <h2 id="aTitle">Админка</h2>
+  <form id="aForm" class="aform" novalidate>
+    <label class="field"><input id="aLink" placeholder="Ссылка: t.me/nft/PlushPepe-1843" autocomplete="off"></label>
+    <div class="arow">
+      <label class="field"><input id="aPrice" class="num" inputmode="decimal" placeholder="Цена, TON" autocomplete="off"></label>
+      <label class="field"><input id="aName" placeholder="Название (необяз.)" autocomplete="off"></label>
+    </div>
+    <div class="arow checks">
+      <label><input type="checkbox" id="aRare"> Редкий</label>
+      <label><input type="checkbox" id="aNew"> Новый</label>
+    </div>
+    <button class="pay" id="aAdd" type="submit">Добавить в магазин</button>
+  </form>
+  <div class="label">В магазине</div>
+  <div class="alist" id="aList"></div>
+  <button class="ghost" id="aClose">Закрыть</button>
 </div></div>
 
 <div class="toast" id="toast" role="status"></div>
@@ -414,6 +452,8 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   var FRAG="https://nft.fragment.com/gift/";
   // Владелец подарков по умолчанию (аккаунт магазина). У подарка можно указать своё поле owner.
   var SHOP_OWNER="@Claps228";
+  // Адрес сервера на Cloudflare (Worker). Пока пусто, подарки берутся из gifts.json, а админка скрыта.
+  var API="";
   var GIFTS=[
     {n:"Plush Pepe",slug:"plushpepe",no:1843,p:640,g:"🐸",bg:["#4C9A5A","#1F4A2A"],rare:true},
     {n:"Durov's Cap",slug:"durovscap",no:512,p:210,g:"🧢",bg:["#5B6CF0","#262E75"],rare:true},
@@ -434,13 +474,29 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     return {n:x.name||(old&&old.n)||m[1].replace(/([a-z])([A-Z])/g,"$1 $2"),slug:m[1].toLowerCase(),no:+m[2],p:+x.price_ton,
       g:(old&&old.g)||"🎁",bg:(old&&old.bg)||PALETTE[i%PALETTE.length],rare:!!x.rare,isNew:!!x.new,owner:x.owner};
   }
+  function useGiftList(list){
+    GIFTS=(list||[]).map(giftFromLink).filter(Boolean);renderGifts();if(ADMIN)renderAdminList();
+  }
   function loadGiftList(){
     if(!window.fetch||location.protocol==="file:")return;
-    fetch("gifts.json",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(list){
-      var gs=(list||[]).map(giftFromLink).filter(Boolean);if(!gs.length)return;
-      GIFTS=gs;renderGifts();
+    var fromFile=function(){return fetch("gifts.json",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(l){if(l&&l.length)useGiftList(l)})};
+    if(!API){fromFile().catch(function(){});return}
+    api("GET","/gifts").then(function(d){if(d.gifts)useGiftList(d.gifts);else return fromFile()}).catch(function(){fromFile().catch(function(){})});
+  }
+  function api(method,path,body){
+    return fetch(API+path,{method:method,cache:"no-store",headers:{"Content-Type":"application/json","X-Init-Data":(tg&&tg.initData)||""},body:body?JSON.stringify(body):undefined})
+      .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok)throw new Error(d.error||("Ошибка "+r.status));return d})});
+  }
+  var ADMIN=false,ME=null;
+  function loadMe(){
+    if(!API||!tg||!tg.initData)return;
+    api("GET","/me").then(function(me){
+      ME=me;BALANCE=me.balance||0;$("balVal").textContent=fmt(BALANCE)+" ₽";
+      $("tId").textContent="Ваш Telegram ID: "+me.id;
+      if(me.isAdmin){ADMIN=true;$("adminBtn").hidden=false}
     }).catch(function(){});
   }
+
   function artImg(g){return '<img alt="" loading="lazy" src="'+FRAG+g.slug+"-"+g.no+'.webp" onload="this.classList.add(\'ok\');this.parentNode.classList.add(\'real\')" onerror="this.remove()">'}
   var lottieCache={},metaCache={};
   function gkey(g){return g.slug+"-"+g.no}
@@ -538,6 +594,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
         '<div class="meta"><span class="name">'+g.n+'</span><span class="model">Коллекция Telegram</span>'+
         '<span class="price num" data-p="'+i+'">'+giftRub(g)+'</span><span class="tonsub num">'+TON_SVG+fmt(g.p,1)+' TON</span></div></button>';
     }).join("");
+    if(!list.length)$("nftGrid").innerHTML='<p class="empty">'+(GIFTS.length?"В этом фильтре подарков нет.":"Подарков пока нет, скоро добавим.")+'</p>';
     if(io)[].forEach.call($("nftGrid").querySelectorAll(".art"),function(a){io.observe(a)});
   }
   $("nftChips").addEventListener("click",function(e){
@@ -643,7 +700,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
         if(w.length<20){toast("Вставьте адрес кошелька TON");$("tonWallet").focus();return}
         openSheet([["Товар",fmt(v,2)+" TON"],["Кошелёк",w.slice(0,6)+"…"+w.slice(-4)],["Курс","1 TON = "+fmt(RATE)+" ₽"]],price,null);
       }}
-    var show=!!label&&!$("sheet").classList.contains("on")&&!$("tSheet").classList.contains("on");
+    var show=!!label&&!$("sheet").classList.contains("on")&&!$("tSheet").classList.contains("on")&&!$("aSheet").classList.contains("on");
     if(tg&&tg.MainButton&&tg.platform!=="unknown"){
       try{
         if(show){tg.MainButton.setParams({text:label+(price?" · "+price:""),color:gold?"#F6B940":"#1AA3F0",text_color:gold?"#231800":"#FFFFFF",is_visible:true})}
@@ -714,6 +771,33 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     if(v<c.min){toast("Минимум "+fmt(c.min)+" "+c.unit);return}
     haptic("medium");closeTop();toast("Демо: пополнение на "+fmt(v)+" "+c.unit+" пока не подключено");
   });
+  /* Админка: видна только тем, кого сервер признал админом */
+  function openAdmin(){renderAdminList();$("aScrim").classList.add("on");$("aSheet").classList.add("on");updateBuy()}
+  function closeAdmin(){$("aScrim").classList.remove("on");$("aSheet").classList.remove("on");updateBuy()}
+  function renderAdminList(){
+    $("aList").innerHTML=GIFTS.length?GIFTS.map(function(g){
+      return '<div class="aitem"><img alt="" src="'+FRAG+g.slug+"-"+g.no+'.webp" onerror="this.style.visibility=\'hidden\'"><div><b>'+escapeHtml(g.n)+' #'+g.no+'</b><small class="num">'+fmt(g.p,2)+' TON'+(g.rare?' · редкий':'')+(g.isNew?' · новый':'')+'</small></div><button type="button" data-del="'+g.slug+"-"+g.no+'">Удалить</button></div>';
+    }).join(""):'<p class="empty">Пока пусто</p>';
+  }
+  $("adminBtn").addEventListener("click",openAdmin);
+  $("aScrim").addEventListener("click",closeAdmin);$("aClose").addEventListener("click",closeAdmin);
+  $("aForm").addEventListener("submit",function(e){
+    e.preventDefault();
+    var body={link:$("aLink").value.trim(),price_ton:parseFloat(String($("aPrice").value).replace(",",".")),name:$("aName").value.trim(),rare:$("aRare").checked,new:$("aNew").checked};
+    if(!/nft\/[A-Za-z0-9]+-\d+/.test(body.link)){toast("Вставьте ссылку вида t.me/nft/PlushPepe-1843");$("aLink").focus();return}
+    if(!(body.price_ton>0)){toast("Укажите цену в TON");$("aPrice").focus();return}
+    $("aAdd").disabled=true;
+    api("POST","/admin/gifts",body).then(function(d){
+      haptic("medium");useGiftList(d.gifts);toast("Подарок добавлен");
+      $("aLink").value="";$("aPrice").value="";$("aName").value="";$("aRare").checked=false;$("aNew").checked=false;
+    }).catch(function(err){toast(err.message)}).then(function(){$("aAdd").disabled=false});
+  });
+  $("aList").addEventListener("click",function(e){
+    var b=e.target.closest("button[data-del]");if(!b)return;
+    if(!b.classList.contains("sure")){b.classList.add("sure");b.textContent="Точно?";setTimeout(function(){b.classList.remove("sure");b.textContent="Удалить"},3000);return}
+    api("DELETE","/admin/gifts/"+b.dataset.del).then(function(d){useGiftList(d.gifts);toast("Удалено")}).catch(function(err){toast(err.message)});
+  });
+
   $("tDm").addEventListener("click",function(){
     var url="https://t.me/"+ADMIN_DM.replace(/^@/,"");
     try{if(tg&&tg.openTelegramLink){tg.openTelegramLink(url);return}}catch(e){}
@@ -779,7 +863,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     var b=e.target.closest(".tab");if(!b)return;haptic("sel");setTab(b.dataset.tab);
   });
 
-  renderGifts();loadGiftList();renderPacks();renderNotify();updStars(false);updTon();
+  renderGifts();loadGiftList();loadMe();renderPacks();renderNotify();updStars(false);updTon();
   refreshRate(false);
   setInterval(function(){refreshRate(true)},RATE_TTL);
   document.addEventListener("visibilitychange",function(){if(!document.hidden)refreshRate(false)});
