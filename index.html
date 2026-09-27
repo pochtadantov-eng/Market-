@@ -168,13 +168,10 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 .art .no,.art .rar{z-index:3}
 /* живые подарки: лёгкое покачивание + мерцающие звёздочки */
 /* живой подарок: фон стоит, двигается только модель (Lottie) */
-.art .lottie{position:absolute;inset:10%;width:80%;height:80%;z-index:1;pointer-events:none}
-.art .lottie.full{inset:0;width:100%;height:100%}
+.art .lottie{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
 .art .lottie svg{display:block}
-.art.live .glyph{visibility:hidden}
-/* фон под анимацией = размытая картинка этого же подарка, поэтому цвета всегда совпадают */
-.art.live img{filter:blur(22px) saturate(1.15);transform:scale(1.35);visibility:visible!important}
-.art.live::before{content:"";position:absolute;inset:0;z-index:1;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.10),transparent 60%),radial-gradient(circle at 50% 50%,transparent 55%,rgba(0,0,0,.18));pointer-events:none}
+/* анимация Telegram уже содержит фон и узор, поэтому картинку под ней прячем */
+.art.live img,.art.live .glyph{visibility:hidden}
 .tglink{display:block;width:max-content;margin:-4px auto 12px;font-size:13px;color:var(--ton);background:none;border:0;padding:4px 8px}
 .lines .rar-pill{font-size:11px;font-weight:700;color:var(--muted);background:var(--surface-2);border-radius:6px;padding:1px 6px;margin-left:6px}
 .art .glyph{animation:sway2 5s ease-in-out infinite;animation-delay:calc(var(--i,0)*-.9s)}
@@ -190,7 +187,7 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 .gift .art::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.22) 50%,transparent 65%);transform:translateX(-120%);animation:shine 4.5s ease-in-out infinite;animation-delay:calc(var(--i,0)*.35s);pointer-events:none}
 @keyframes rise{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes shine{0%,70%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
-.sheet-art{aspect-ratio:1/1;width:100%;max-width:340px;margin:0 auto 14px;border-radius:22px;position:relative;display:grid;place-items:center;font-size:84px;overflow:hidden}
+.sheet-art{aspect-ratio:1/1;width:62%;max-width:240px;margin:0 auto 14px;border-radius:22px;position:relative;display:grid;place-items:center;font-size:84px;overflow:hidden}
 .sheet-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 .sheet-art .glyph{font-size:120px}
 .sheet-art.real{background:var(--surface-2)!important}
@@ -402,7 +399,6 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     art.dataset.live="1";
     return getLottie(g).then(function(data){
       var box=document.createElement("div");box.className="lottie";
-      if((data.layers||[]).some(function(l){return l.ty===1}))box.classList.add("full");
       art.appendChild(box);
       var a=lottie.loadAnimation({container:box,renderer:"svg",loop:true,autoplay:true,animationData:data});
       art.classList.add("live");
@@ -623,11 +619,11 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
       getMeta(g).then(function(m){
         var at=m.attributes||[];
         function pick(names){for(var i=0;i<at.length;i++){var t=String(at[i].trait_type||at[i].type||"").toLowerCase();if(names.indexOf(t)>-1)return at[i]}return null}
-        function show(id,a){var el=$(id);if(!el)return;if(!a){el.textContent="—";return}
+        function show(id,a){var el=$(id);if(!el)return;if(!a){el.parentNode.remove();return}
           var r=a.rarity||a.rarity_per_mille&&(a.rarity_per_mille/10+"%")||"";
           el.innerHTML=escapeHtml(a.value)+(r?'<span class="rar-pill">'+escapeHtml(r)+'</span>':'')}
         show("aModel",pick(["model"]));show("aBack",pick(["backdrop","background"]));show("aSym",pick(["symbol","pattern"]));
-      }).catch(function(){["aModel","aBack","aSym"].forEach(function(id){var el=$(id);if(el)el.textContent="нет данных"})});
+      }).catch(function(){["aModel","aBack","aSym"].forEach(function(id){var el=$(id);if(el)el.parentNode.remove()})});
     }
     if(tg&&tg.BackButton)try{tg.BackButton.show()}catch(e){}
   }
