@@ -354,11 +354,11 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
 <script>
 (function(){
   var tg = window.Telegram && window.Telegram.WebApp;
-  // TON: берём биржевой курс TON/RUB, обновляем раз в час, продаём на 15% дешевле
+  // TON: берём биржевой курс TON/RUB, обновляем каждые 5 минут, продаём на 15% дешевле
   var TON_DISCOUNT = 0.15;
   var MARKET = null;         // биржевой курс, ₽ за 1 TON
   var RATE = null;           // наша цена, ₽ за 1 TON
-  var RATE_TTL = 60*60*1000; // 1 час
+  var RATE_TTL = 5*60*1000;  // 5 минут
   // Звёзды: цена за 1 звезду зависит от количества
   var STAR_MIN = 100, STAR_MAX = 100000;
   var STAR_TIERS = [
