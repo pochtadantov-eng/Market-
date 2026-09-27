@@ -20,6 +20,9 @@
 | Метод | Путь | Доступ |
 |---|---|---|
 | GET | `/gifts` | все |
+| GET | `/rate` | все: курс TON/RUB, по которому сервер считает цены |
+| GET | `/orders` | с подписью Telegram: заказы покупателя |
+| POST | `/tg` | Telegram webhook (кнопки заказов в боте), подключается сам при входе админа |
 | GET | `/me` | с подписью Telegram |
 | POST | `/buy` `{type:"gift", id}` · `{type:"stars", amount, to?}` · `{type:"ton", amount, wallet}` | с подписью Telegram: списывает баланс, при нехватке ошибка 402; пишет покупателю и админам в бота |
 | POST | `/admin/gifts` `{link, price_ton, name?, rare?, new?}` | админ |

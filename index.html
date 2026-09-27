@@ -205,6 +205,20 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 .lines span{color:var(--muted)}
 .lines .total{border-top:1px solid var(--line);padding-top:10px;font-weight:700;font-size:16px}
 .lines .total span{color:var(--text)}
+.olist{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.order{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;animation:rise .35s ease both}
+.order .top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.order .oid{font-weight:700;font-size:13px;color:var(--muted);letter-spacing:.02em}
+.order .st{margin-left:auto;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.order .st.pending{color:#F6B940;background:rgba(246,185,64,.12)}
+.order .st.done{color:var(--ok);background:rgba(61,214,140,.12)}
+.order .st.rejected{color:#FF6B6B;background:rgba(255,107,107,.12)}
+.order .it{font-weight:600;font-size:15px;margin-bottom:2px;overflow-wrap:anywhere}
+.order .sub{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.order .eta{margin-top:10px;font-size:13px;color:var(--muted);background:var(--surface-2);border-radius:10px;padding:8px 10px}
+.order .eta b{color:var(--text);font-weight:600}
+.order .cancel{margin-top:10px;width:100%;border:1px solid var(--line);background:none;color:#FF8A8A;border-radius:12px;padding:10px;font-weight:600;font-size:14px}
+.tab[aria-selected="true"][data-tab="orders"] svg{color:var(--ton)}
 .demo{font-size:13px;color:var(--muted);background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:12px}
 .pay{width:100%;border:0;border-radius:14px;padding:14px;font-weight:700;background:var(--ton);color:#fff}
 .pay:disabled{opacity:.6}
@@ -379,6 +393,13 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     <button class="notify" id="notify" aria-pressed="false">Сообщить о запуске</button>
   </section>
 
+  <!-- ИСТОРИЯ ЗАКАЗОВ -->
+  <section id="p-orders" role="tabpanel" hidden>
+    <h1>История заказов</h1>
+    <p class="lead">Здесь видно, что вы купили и в каком статусе заказ.</p>
+    <div class="olist" id="oList"><p class="empty">Загрузка…</p></div>
+  </section>
+
   <!-- ADMIN: видно только тем, кого сервер признал админом -->
   <section id="p-admin" role="tabpanel" hidden>
     <h1>Админ-панель</h1>
@@ -418,6 +439,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   <button class="tab" role="tab" data-tab="stars" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>Stars</button>
   <button class="tab" role="tab" data-tab="ton" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M5.5 5h13c1 0 1.6 1 1.1 1.9L13 19.3a1.2 1.2 0 0 1-2 0L4.4 6.9C3.9 6 4.5 5 5.5 5ZM12 5v14"/></svg>TON</button>
   <button class="tab" role="tab" data-tab="premium" aria-selected="false"><span class="badge">скоро</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 8l4 3 4-6 4 6 4-3-1.5 10h-13z"/></svg>Premium</button>
+  <button class="tab" role="tab" data-tab="orders" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4.5V9H8"/><path d="M12 7.5V12l3 2"/></svg>История</button>
   <button class="tab" role="tab" data-tab="admin" aria-selected="false" id="adminTab" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.4 3.1 8.2 7.5 9.5 4.4-1.3 7.5-5.1 7.5-9.5V6z"/><path d="m9 12 2 2 4-4"/></svg>Админ</button>
 </nav></div>
 
@@ -426,7 +448,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   <div class="grab"></div>
   <h2 id="sheetTitle">Оформление заказа</h2>
   <div class="lines" id="sheetLines"></div>
-  <div class="demo">Демо-версия: оплата пока не подключена, деньги не списываются.</div>
+  <div class="demo">Оплата с баланса. Заказ выполним в течение нескольких часов, статус будет во вкладке «История».</div>
   <button class="pay" id="payBtn">Оплатить</button>
   <button class="ghost" id="closeSheet">Отмена</button>
 </div></div>
@@ -605,6 +627,11 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   }
   function getJSON(u){return fetch(u,{cache:"no-store"}).then(function(r){if(!r.ok)throw r.status;return r.json()})}
   function fetchMarket(){
+    // сначала курс с нашего сервера: по нему же сервер считает цену при покупке
+    if(API)return getJSON(API+"/rate").then(function(d){if(!(d.market>0))throw 0;return d.market}).catch(fetchMarketPublic);
+    return fetchMarketPublic();
+  }
+  function fetchMarketPublic(){
     // 1) CoinGecko TON/RUB; 2) запасной: Binance TON/USDT × курс доллара ЦБ РФ
     return getJSON("https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=rub")
       .then(function(d){var v=d["the-open-network"].rub;if(!(v>0))throw 0;return v})
@@ -766,6 +793,38 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   $("buyBtn").addEventListener("click",doBuy);
   if(tg&&tg.MainButton){try{tg.MainButton.onClick(doBuy)}catch(e){}}
 
+  /* История заказов */
+  var ORDERS=null;
+  var ETA_H=6; // примерное время выполнения, часов
+  var ST={pending:"В обработке",done:"Выполнен",rejected:"Отклонён"};
+  function ago(ms){var m=Math.max(1,Math.round(ms/60000));if(m<60)return m+" мин";var h=Math.floor(m/60);return h+" ч"+(m%60?" "+(m%60)+" мин":"")}
+  function loadOrders(){
+    if(!API||!tg||!tg.initData){$("oList").innerHTML='<p class="empty">Откройте магазин через бота, чтобы увидеть заказы.</p>';return}
+    if(!ORDERS)$("oList").innerHTML='<p class="empty">Загрузка…</p>';
+    api("GET","/orders").then(function(d){ORDERS=d.orders||[];renderOrders()})
+      .catch(function(err){$("oList").innerHTML='<p class="empty">'+escapeHtml(err.message||"Нет связи с сервером")+'</p>'});
+  }
+  function renderOrders(){
+    if(!ORDERS.length){$("oList").innerHTML='<p class="empty">Заказов пока нет. Всё, что купите, появится здесь.</p>';return}
+    var now=Date.now();
+    $("oList").innerHTML=ORDERS.map(function(o,k){
+      var st=o.status||"pending",d=new Date(o.at).toLocaleString("ru-RU",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+      var eta="";
+      if(st==="pending"){var left=o.at+ETA_H*3600000-now;
+        eta='<div class="eta">'+(left>0?'Примерное ожидание: <b>до '+ago(left)+'</b>':'<b>Скоро будет готово</b>, возможна небольшая задержка')+'<br>Оформлен '+ago(now-o.at)+' назад</div>'+
+          '<button class="cancel" data-cancel="'+escapeHtml(o.id)+'">Отменить заказ</button>'}
+      return '<div class="order" style="animation-delay:'+(k*40)+'ms"><div class="top"><span class="oid">#'+escapeHtml(o.id)+'</span><span class="st '+st+'">'+(ST[st]||st)+'</span></div>'+
+        '<div class="it">'+escapeHtml(o.item)+'</div><div class="sub num"><span>'+d+'</span><span>'+fmt(o.rub,2)+' ₽</span></div>'+eta+'</div>';
+    }).join("");
+  }
+  $("oList").addEventListener("click",function(e){
+    var b=e.target.closest("button[data-cancel]");if(!b)return;haptic("medium");
+    var msg="Здравствуйте, я хочу отменить заказ: #"+b.dataset.cancel+"\nПричина: ";
+    var url="https://t.me/"+SHOP_OWNER.replace(/^@/,"")+"?text="+encodeURIComponent(msg);
+    try{if(tg&&tg.openTelegramLink){tg.openTelegramLink(url);return}}catch(e){}
+    window.open(url,"_blank");
+  });
+
   /* Sheet */
   var sheetArt=null;
   function openSheet(lines,total,sub,g){
@@ -926,6 +985,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     api("POST","/buy",Object.assign({expect:p.rub},p.body)).then(function(d){
       haptic("heavy");setBalance(d.balance);closeSheet();burst(color);
       if(d.gifts)useGiftList(d.gifts);
+      ORDERS=null;
       toast(d.notified?"Готово! Подробности отправили вам в чат с ботом":"Готово! Нажмите Start в боте, чтобы получать уведомления");
     }).catch(function(err){
       haptic("error");var d=err.data||{};
@@ -984,8 +1044,9 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   function setTab(t){
     state.tab=t;
     document.querySelectorAll(".tab").forEach(function(b){b.setAttribute("aria-selected",b.dataset.tab===t)});
-    ["nft","stars","ton","premium","admin"].forEach(function(k){$("p-"+k).hidden=k!==t});
+    ["nft","stars","ton","premium","orders","admin"].forEach(function(k){$("p-"+k).hidden=k!==t});
     if(t==="admin")renderAdminList();
+    if(t==="orders")loadOrders();
     window.scrollTo(0,0);updateBuy();
   }
   document.querySelector(".tabs nav").addEventListener("click",function(e){
@@ -997,7 +1058,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   setInterval(function(){refreshRate(true)},RATE_TTL);
   document.addEventListener("visibilitychange",function(){if(!document.hidden)refreshRate(false)});
   var h=(location.hash||"").slice(1);
-  setTab(["nft","stars","ton","premium"].indexOf(h)>-1?h:"nft");
+  setTab(["nft","stars","ton","premium","orders"].indexOf(h)>-1?h:"nft");
 })();
 </script>
 </body></html>

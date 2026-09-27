@@ -18,9 +18,10 @@ const STAR_MIN = 100, STAR_MAX = 100000;
 const STAR_TIERS = [ { from: 100, rub: 1.3 }, { from: 500, rub: 1.1 }, { from: 2000, rub: 1.0 }, { from: 10000, rub: 0.9 } ];
 const PRICE_SLACK = 0.03; // если цена выросла больше чем на 3% с того, что видел покупатель, просим подтвердить заново
 const FRAG = "https://nft.fragment.com/gift/";
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36";
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = env.ALLOWED_ORIGIN || "https://pochtadantov-eng.github.io";
     const cors = {
       "Access-Control-Allow-Origin": origin,
@@ -42,9 +43,25 @@ export default {
         return json({ gifts: await loadGifts(env, origin) });
       }
 
-      // Дальше только с подписью Telegram
+      // Публично: курс TON/RUB, по которому сервер считает цены (мини-приложение показывает его же)
+      if (request.method === "GET" && path === "/rate") {
+        const r = await tonRub(env);
+        return r.v ? json({ market: r.v, source: r.src, at: r.t }) : json({ error: "Курс недоступен" }, 503);
+      }
+
       const token = String(env.BOT_TOKEN || "").trim().replace(/^["']|["']$/g, "");
       if (!token) return json({ error: "На сервере не задан BOT_TOKEN" }, 500);
+
+      // Кнопки «Подтвердить / Отклонить» в боте: Telegram присылает нажатия сюда (webhook)
+      if (request.method === "POST" && path === "/tg") {
+        const secret = await hookSecret(token);
+        if (request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== secret) return new Response("forbidden", { status: 403 });
+        const update = await request.json().catch(() => ({}));
+        await onUpdate(env, token, update).catch(() => {});
+        return new Response("ok");
+      }
+
+      // Дальше только с подписью Telegram
       const auth = await checkInitData(request.headers.get("X-Init-Data") || "", token);
       if (auth.error) return json({ error: auth.error }, 401);
       const user = auth.user;
@@ -53,7 +70,18 @@ export default {
       if (me.banned && !isAdmin) return json({ error: "Доступ к магазину закрыт", banned: true }, 403);
 
       if (request.method === "GET" && path === "/me") {
+        // Когда админ открывает магазин, подключаем webhook бота (один раз), чтобы работали кнопки заказов
+        if (isAdmin) {
+          const job = ensureWebhook(env, token, url.origin).catch(() => {});
+          if (ctx && ctx.waitUntil) ctx.waitUntil(job); else await job;
+        }
         return json({ id: user.id, username: user.username || null, isAdmin, balance: me.balance || 0 });
+      }
+
+      // История заказов покупателя
+      if (request.method === "GET" && path === "/orders") {
+        const orders = ((await env.DB.get("orders", "json")) || []).filter((o) => o.user === user.id).slice(0, 50);
+        return json({ orders: orders.map(({ gift, ...o }) => o) });
       }
 
       // Покупка за баланс: {type:"gift", id} | {type:"stars", amount, to?} | {type:"ton", amount, wallet}; expect = цена, которую видел покупатель
@@ -142,7 +170,7 @@ async function buy(env, origin, token, tgUser, body, json) {
     gifts = await loadGifts(env, origin);
     gift = gifts.find((g) => g.id === String(body.id || ""));
     if (!gift) return json({ error: "Этот подарок уже купили или сняли с продажи", sold: true }, 410);
-    const market = await tonRub();
+    const market = (await tonRub(env)).v;
     if (!market) return json({ error: "Не удалось узнать курс TON, попробуйте через минуту" }, 503);
     rub = Math.round(gift.price_ton * market);
     item = gift.name + " #" + gift.link.split("-").pop();
@@ -159,7 +187,7 @@ async function buy(env, origin, token, tgUser, body, json) {
     if (!(v >= TON_MIN && v <= TON_MAX)) return json({ error: "Можно купить от " + TON_MIN + " до " + TON_MAX + " TON" }, 400);
     const wallet = String(body.wallet || "").trim();
     if (!/^[A-Za-z0-9_:\-]{20,80}$/.test(wallet)) return json({ error: "Неверный адрес кошелька TON" }, 400);
-    const market = await tonRub();
+    const market = (await tonRub(env)).v;
     if (!market) return json({ error: "Не удалось узнать курс TON, попробуйте через минуту" }, 503);
     rub = Math.round(v * Math.floor(market * (1 - TON_DISCOUNT)));
     item = v + " TON на кошелёк " + wallet;
@@ -180,9 +208,11 @@ async function buy(env, origin, token, tgUser, body, json) {
   // Уникальный подарок продаётся один раз: убираем его с витрины
   if (gift) await env.DB.put("gifts", JSON.stringify(gifts.filter((g) => g.id !== gift.id)));
 
-  const order = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), type, item, rub, user: u.id, username: u.username || null, at: Date.now() };
-  if (gift) order.link = gift.link;
   const orders = (await env.DB.get("orders", "json")) || [];
+  let id;
+  do id = orderId(); while (orders.some((o) => o.id === id));
+  const order = { id, type, item, rub, user: u.id, username: u.username || null, at: Date.now(), status: "pending" };
+  if (gift) { order.link = gift.link; order.gift = gift; }
   orders.unshift(order);
   await env.DB.put("orders", JSON.stringify(orders.slice(0, 500)));
 
@@ -190,29 +220,61 @@ async function buy(env, origin, token, tgUser, body, json) {
   const notified = await notifyBuyer(token, u, order, gift).catch(() => false);
   await notifyAdmins(env, token, u, order).catch(() => {});
 
-  return json({ ok: true, balance: u.balance, order, notified, gifts: gift ? gifts.filter((g) => g.id !== gift.id) : undefined });
+  const { gift: _g, ...pub } = order;
+  return json({ ok: true, balance: u.balance, order: pub, notified, gifts: gift ? gifts.filter((g) => g.id !== gift.id) : undefined });
 }
 
-// Курс TON/RUB: CoinGecko, запасной вариант Binance TON/USDT × курс доллара ЦБ. Держим в памяти 5 минут.
-let rateCache = { v: 0, t: 0 };
-async function tonRub() {
-  if (rateCache.v && Date.now() - rateCache.t < RATE_TTL) return rateCache.v;
-  let v = 0;
-  try {
-    const d = await (await fetch("https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=rub", { headers: { Accept: "application/json" } })).json();
-    v = Number(d["the-open-network"].rub) || 0;
-  } catch {}
-  if (!v) {
-    try {
-      const [b, c] = await Promise.all([
-        fetch("https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT").then((r) => r.json()),
-        fetch("https://www.cbr-xml-daily.ru/daily_json.js").then((r) => r.json()),
-      ]);
-      v = parseFloat(b.price) * c.Valute.USD.Value || 0;
-    } catch {}
+// Курс TON/RUB. Биржи иногда не отвечают серверам Cloudflare, поэтому источников несколько:
+// CoinGecko и CryptoCompare сразу в рублях, иначе TON/USDT с OKX, Bybit, KuCoin или Binance × курс доллара.
+// Держим в памяти 5 минут, последний удачный курс храним в KV (не старше суток) на случай, если все молчат.
+let rateCache = { v: 0, t: 0, src: "" };
+const getJ = (u) => fetch(u, { headers: { "User-Agent": UA, Accept: "application/json" } }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
+const RUB_SOURCES = [
+  ["coingecko", async () => (await getJ("https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=rub"))["the-open-network"].rub],
+  ["cryptocompare", async () => (await getJ("https://min-api.cryptocompare.com/data/price?fsym=TON&tsyms=RUB")).RUB],
+];
+const USD_SOURCES = [
+  ["okx", async () => (await getJ("https://www.okx.com/api/v5/market/ticker?instId=TON-USDT")).data[0].last],
+  ["bybit", async () => (await getJ("https://api.bybit.com/v5/market/tickers?category=spot&symbol=TONUSDT")).result.list[0].lastPrice],
+  ["kucoin", async () => (await getJ("https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=TON-USDT")).data.price],
+  ["binance", async () => (await getJ("https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT")).price],
+];
+const USDRUB_SOURCES = [
+  async () => (await getJ("https://www.cbr-xml-daily.ru/daily_json.js")).Valute.USD.Value,
+  async () => (await getJ("https://open.er-api.com/v6/latest/USD")).rates.RUB,
+];
+async function firstOk(list) {
+  for (const f of list) {
+    try { const v = Number(await f()); if (v > 0) return v; } catch {}
   }
-  if (v > 0) rateCache = { v, t: Date.now() };
-  return rateCache.v || 0; // если биржи молчат, берём последний известный курс
+  return 0;
+}
+async function tonRub(env) {
+  if (rateCache.v && Date.now() - rateCache.t < RATE_TTL) return rateCache;
+  let v = 0, src = "";
+  for (const [name, f] of RUB_SOURCES) {
+    try { v = Number(await f()) || 0; } catch {}
+    if (v > 0) { src = name; break; }
+  }
+  if (!v) {
+    const [usd, usdrub] = await Promise.all([firstOk(USD_SOURCES.map(([, f]) => f)), firstOk(USDRUB_SOURCES)]);
+    if (usd && usdrub) { v = usd * usdrub; src = "usdt×usd"; }
+  }
+  if (v > 0) {
+    rateCache = { v, t: Date.now(), src };
+    const saved = await env.DB.get("rate", "json").catch(() => null);
+    if (!saved || Date.now() - saved.t > 60 * 60 * 1000) await env.DB.put("rate", JSON.stringify(rateCache)).catch(() => {});
+    return rateCache;
+  }
+  const saved = await env.DB.get("rate", "json").catch(() => null);
+  if (saved && saved.v > 0 && Date.now() - saved.t < 24 * 3600 * 1000) return { ...saved, src: "saved" };
+  return rateCache.v ? rateCache : { v: 0, t: 0, src: "" };
+}
+
+function orderId() {
+  const abc = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const b = crypto.getRandomValues(new Uint8Array(6));
+  return [...b].map((x) => abc[x % abc.length]).join("");
 }
 
 function fmtRub(n) {
@@ -237,7 +299,7 @@ async function tgApi(token, method, payload) {
 // Покупателю в чат с ботом: анимация подарка (стикер из его Lottie с Fragment), затем описание.
 async function notifyBuyer(token, u, order, gift) {
   const chat_id = u.id;
-  const wait = "⏳ Подарок будет выведен на ваш аккаунт в течение нескольких часов. Возможна задержка, это нормально: всё придёт.";
+  const wait = "⏳ Подарок будет выведен на ваш аккаунт в течение нескольких часов. Возможна задержка, это нормально: всё придёт.\nСтатус заказа видно в магазине во вкладке «История».";
   let text, sticker = false, extra = {};
   if (gift) {
     const key = gift.id; // slug-номер, как на nft.fragment.com
@@ -248,14 +310,14 @@ async function notifyBuyer(token, u, order, gift) {
     const rows = [["Модель", pick(["model"])], ["Фон", pick(["backdrop", "background"])], ["Узор", pick(["symbol", "pattern"])]]
       .filter(([, a]) => a && a.value)
       .map(([k, a]) => k + ": <b>" + esc(a.value) + "</b>");
-    text = ["🎁 <b>Покупка оформлена!</b>", "", "<b>" + esc(order.item) + "</b>", "Коллекция Telegram", ...rows, "",
+    text = ["🎁 <b>Покупка оформлена!</b>" + "\nЗаказ <b>#" + order.id + "</b>", "", "<b>" + esc(order.item) + "</b>", "Коллекция Telegram", ...rows, "",
       "Списано: <b>" + fmtRub(order.rub) + "</b>", "Остаток на балансе: " + fmtRub(u.balance), "", wait].join("\n");
     extra.reply_markup = { inline_keyboard: [[{ text: "Посмотреть подарок", url: gift.link }]] };
     // Не получилось со стикером: пусть Telegram покажет анимированное превью подарка по ссылке над текстом
     extra.link_preview_options = sticker ? { is_disabled: true } : { url: gift.link, prefer_large_media: true, show_above_text: true };
   } else {
     const emoji = order.type === "stars" ? "⭐️" : "💎";
-    text = [emoji + " <b>Покупка оформлена!</b>", "", "<b>" + esc(order.item) + "</b>", "",
+    text = [emoji + " <b>Покупка оформлена!</b>" + "\nЗаказ <b>#" + order.id + "</b>", "", "<b>" + esc(order.item) + "</b>", "",
       "Списано: <b>" + fmtRub(order.rub) + "</b>", "Остаток на балансе: " + fmtRub(u.balance), "",
       wait.replace("Подарок будет выведен на ваш аккаунт", order.type === "stars" ? "Звёзды будут зачислены" : "TON будут отправлены на кошелёк")].join("\n");
     extra.link_preview_options = { is_disabled: true };
@@ -274,11 +336,84 @@ async function sendGiftSticker(token, chat_id, key) {
   return tgApi(token, "sendSticker", form);
 }
 
-// Админам: кто и что купил, чтобы вывести заказ
+// Админам: кто и что купил, с кнопками. Каждое действие спрашивается второй раз.
+function adminText(order, extra) {
+  const who = order.username ? "@" + order.username : "без username";
+  return "🛒 <b>Заказ #" + order.id + "</b>\n" + esc(order.item) + "\nСумма: " + fmtRub(order.rub) +
+    "\nПокупатель: " + who + " (ID <code>" + order.user + "</code>)" + (order.link ? "\n" + order.link : "") + (extra ? "\n\n" + extra : "");
+}
+const kbMain = (id) => ({ inline_keyboard: [[{ text: "✅ Подтвердить", callback_data: "c:" + id }, { text: "❌ Отклонить", callback_data: "r:" + id }]] });
+
 async function notifyAdmins(env, token, u, order) {
-  const who = u.username ? "@" + u.username : esc(u.name || "без имени");
-  const text = "🛒 <b>Новый заказ</b>\n" + esc(order.item) + "\nСумма: " + fmtRub(order.rub) + "\nПокупатель: " + who + " (ID <code>" + u.id + "</code>)" + (order.link ? "\n" + order.link : "");
-  await Promise.all(adminIds(env).map((id) => tgApi(token, "sendMessage", { chat_id: id, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } })));
+  await Promise.all(adminIds(env).map((id) => tgApi(token, "sendMessage", {
+    chat_id: id, text: adminText(order), parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: kbMain(order.id),
+  })));
+}
+
+async function hookSecret(token) {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("nova-hook:" + token));
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 48);
+}
+
+async function ensureWebhook(env, token, origin) {
+  const url = origin + "/tg";
+  if ((await env.DB.get("webhook")) === url) return;
+  const ok = await tgApi(token, "setWebhook", { url, secret_token: await hookSecret(token), allowed_updates: ["callback_query"] });
+  if (ok) await env.DB.put("webhook", url);
+}
+
+async function onUpdate(env, token, update) {
+  const q = update.callback_query;
+  if (!q) return;
+  const answer = (text) => tgApi(token, "answerCallbackQuery", { callback_query_id: q.id, text: text || "" });
+  const chat_id = q.message && q.message.chat.id, message_id = q.message && q.message.message_id;
+  if (!adminIds(env).includes(String(q.from.id))) return answer("Нет доступа");
+  const m = String(q.data || "").match(/^(c|r|cc|rr|b):([A-Za-z0-9]+)$/);
+  if (!m) return answer();
+  const [, act, id] = m;
+  const orders = (await env.DB.get("orders", "json")) || [];
+  const order = orders.find((o) => o.id === id);
+  if (!order) return answer("Заказ не найден");
+  const done = order.status && order.status !== "pending";
+  if (done) {
+    await tgApi(token, "editMessageText", { chat_id, message_id, text: adminText(order, statusLine(order)), parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+    return answer("Заказ уже обработан");
+  }
+  if (act === "c" || act === "r") {
+    // Второй шаг: спрашиваем ещё раз
+    const yes = act === "c" ? { text: "✅ Да, подтвердить #" + id, callback_data: "cc:" + id } : { text: "❌ Да, отклонить #" + id, callback_data: "rr:" + id };
+    await tgApi(token, "editMessageReplyMarkup", { chat_id, message_id, reply_markup: { inline_keyboard: [[yes], [{ text: "↩️ Назад", callback_data: "b:" + id }]] } });
+    return answer(act === "c" ? "Точно подтвердить? Нажмите ещё раз" : "Точно отклонить? Деньги вернутся покупателю");
+  }
+  if (act === "b") {
+    await tgApi(token, "editMessageReplyMarkup", { chat_id, message_id, reply_markup: kbMain(id) });
+    return answer();
+  }
+  // Окончательное решение
+  order.status = act === "cc" ? "done" : "rejected";
+  order.closed = Date.now();
+  order.by = q.from.username ? "@" + q.from.username : String(q.from.id);
+  let u = null;
+  if (order.status === "rejected") {
+    u = (await getUser(env, order.user)) || newUser({ id: order.user });
+    u.balance = Math.round(((u.balance || 0) + order.rub) * 100) / 100;
+    await saveUser(env, u, false);
+    if (order.gift) {
+      const gifts = await env.DB.get("gifts", "json") || [];
+      if (!gifts.some((g) => g.id === order.gift.id)) { gifts.unshift(order.gift); await env.DB.put("gifts", JSON.stringify(gifts)); }
+    }
+  }
+  await env.DB.put("orders", JSON.stringify(orders));
+  await tgApi(token, "editMessageText", { chat_id, message_id, text: adminText(order, statusLine(order)), parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+  const buyerText = order.status === "done"
+    ? "✅ <b>Заказ #" + order.id + " выполнен</b>\n" + esc(order.item) + "\n\nСпасибо за покупку!"
+    : "❌ <b>Заказ #" + order.id + " отклонён</b>\n" + esc(order.item) + "\n\n" + fmtRub(order.rub) + " вернули на баланс. Сейчас на балансе " + fmtRub(u.balance) + ".";
+  await tgApi(token, "sendMessage", { chat_id: order.user, text: buyerText, parse_mode: "HTML" }).catch(() => {});
+  return answer(order.status === "done" ? "Заказ подтверждён" : "Заказ отклонён, деньги возвращены");
+}
+
+function statusLine(o) {
+  return o.status === "done" ? "✅ Подтверждён" + (o.by ? " (" + esc(o.by) + ")" : "") : "❌ Отклонён, деньги возвращены" + (o.by ? " (" + esc(o.by) + ")" : "");
 }
 
 function newUser(tgUser) {
