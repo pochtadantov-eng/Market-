@@ -242,30 +242,6 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 .sheet-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 .sheet-art .glyph{font-size:120px}
 .sheet-art.real{background:var(--surface-2)!important}
-/* карточка подарка в стиле Telegram */
-.sheet.gm{padding-top:0}
-.sheet.gm .grab,.sheet.gm #sheetTitle,.sheet.gm #closeSheet{display:none}
-.gm-hero{position:relative;margin:0 -16px 16px;aspect-ratio:1/.92;max-height:420px;overflow:hidden;border-radius:22px 22px 0 0;display:grid;place-items:center;font-size:110px}
-.gm-hero.sheet-art{width:auto;max-width:none;border-radius:22px 22px 0 0;margin:0 -16px 16px}
-.gm-hero .lottie,.gm-hero img{transform:scale(1.18) translateY(-6%)}
-.lines>div.gm-table{display:block}
-.gm-hero .glyph{font-size:120px;transform:translateY(-12%)}
-.gm-cap{position:absolute;left:0;right:0;bottom:0;z-index:4;padding:40px 16px 18px;text-align:center;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.35);pointer-events:none}
-.gm-cap b{display:block;font:700 26px/1.15 var(--display)}
-.gm-cap b small{font-size:.8em;opacity:.7;font-weight:700}
-.gm-cap span{display:block;margin-top:4px;font-size:15px;font-weight:600;opacity:.8}
-.gm-x{position:absolute;top:12px;left:12px;z-index:5;width:40px;height:40px;border-radius:50%;border:0;background:rgba(255,255,255,.22);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;display:grid;place-items:center}
-.gm-x svg{width:20px;height:20px}
-.gm-grab{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:5;width:40px;height:4px;border-radius:4px;background:rgba(255,255,255,.45)}
-.gm-table{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px}
-.gm-table>div{display:grid;grid-template-columns:34% 1fr;border-top:1px solid var(--line);font-size:15px}
-.gm-table>div:first-child{border-top:0}
-.gm-table span{background:var(--surface-2);padding:11px 12px;font-weight:600;border-right:1px solid var(--line)}
-.gm-table b{padding:11px 12px;font-weight:500;display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0}
-.gm-table .rar-pill{font-size:12px;font-weight:600;color:var(--ton);background:rgba(26,163,240,.14);border-radius:10px;padding:2px 8px}
-.gm-table .seller{color:var(--ton)}
-.gm-note{text-align:center;color:var(--muted);font-size:14px;margin:0 8px 14px}
-.pay small{display:block;font-size:12.5px;font-weight:600;opacity:.75;margin-top:2px}
 
 /* animated heroes */
 .hero{position:relative;overflow:hidden;border-radius:22px;padding:20px 18px;margin-bottom:16px;border:1px solid rgba(255,255,255,.07);min-height:168px;display:flex;flex-direction:column;justify-content:flex-end}
@@ -616,7 +592,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
 
   /* Курс TON */
   // цены NFT хранятся в TON, показываем в рублях по текущему курсу
-  function giftRub(g){return MARKET?fmt(Math.round(g.p*MARKET))+" ₽":fmt(g.p,2)+" TON"}
+  function giftRub(g){return MARKET?fmt(Math.round(g.p*MARKET))+" ₽":fmt(g.p,1)+" TON"}
   function updGiftPrices(){[].forEach.call(document.querySelectorAll(".price[data-p]"),function(el){el.textContent=giftRub(GIFTS[+el.dataset.p])})}
   function applyRate(market,ts){
     MARKET=market;RATE=Math.floor(market*(1-TON_DISCOUNT));
@@ -676,7 +652,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     var b=e.target.closest(".gift");if(!b)return;
     haptic();var g=GIFTS[+b.dataset.i];
     openSheet([["Подарок",g.n+" #"+fmt(g.no)],["Модель","…","aModel"],["Фон","…","aBack"],["Узор","…","aSym"],["Владелец",g.owner||SHOP_OWNER],["Получатель","ваш аккаунт"]],
-      giftRub(g),MARKET?fmt(g.p,2)+" TON":null,g);
+      giftRub(g),MARKET?fmt(g.p,1)+" TON":null,g);
   });
 
   /* Stars */
@@ -790,30 +766,15 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   var sheetArt=null;
   function openSheet(lines,total,sub,g){
     if(sheetArt&&sheetArt._anim){try{sheetArt._anim.destroy()}catch(e){}}sheetArt=null;
-    $("sheet").classList.toggle("gm",!!g);
-    if(g){
-      var seller=g.owner||SHOP_OWNER;
-      $("sheetLines").innerHTML='<div class="sheet-art art gm-hero" id="sArt" style="'+artBg(g)+'">'+artImg(g)+'<span class="glyph">'+g.g+'</span>'+sparks(10)+
-          '<span class="gm-grab"></span><button type="button" class="gm-x" id="gmX" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'+
-          '<div class="gm-cap"><b>'+escapeHtml(g.n)+' <small>#'+g.no+'</small></b><span id="gmModel"></span></div></div>'+
-        '<div class="gm-table">'+
-          '<div><span>Продавец</span><b class="seller">'+escapeHtml(seller)+'</b></div>'+
-          '<div><span>Модель</span><b id="aModel">…</b></div>'+
-          '<div><span>Узор</span><b id="aSym">…</b></div>'+
-          '<div><span>Фон</span><b id="aBack">…</b></div>'+
-          '<div><span>Цена</span><b class="num">'+total+(sub?' <small style="color:var(--muted)">≈ '+sub+'</small>':'')+'</b></div>'+
-        '</div>'+
-        '<p class="gm-note">'+escapeHtml(seller)+' продаёт этот подарок. Вы можете его купить.</p>';
-      $("payBtn").innerHTML='Купить за '+(sub?'💎 '+sub.replace(" TON",""):total)+(sub?'<small>Эквивалентно '+total+'</small>':'');
-      $("gmX").onclick=closeSheet;
-    }else{
-      $("sheetLines").innerHTML=lines.map(function(l){return '<div><span>'+l[0]+'</span><b'+(l[2]?' id="'+l[2]+'"':'')+'>'+escapeHtml(l[1])+'</b></div>'}).join("")+
-        '<div class="total num"><span>Итого</span><span>'+total+(sub?' <small style="color:var(--muted);font-weight:500">≈ '+sub+'</small>':'')+'</span></div>';
-      $("payBtn").textContent="Оплатить";
-    }
+    var art=g?'<div class="sheet-art art" id="sArt" style="'+artBg(g)+'">'+artImg(g)+'<span class="glyph">'+g.g+'</span>'+sparks(8)+'</div>'+
+      '<button class="tglink" id="tgLink">Открыть в Telegram</button>':"";
+    $("sheetLines").innerHTML=art+lines.map(function(l){return '<div><span>'+l[0]+'</span><b'+(l[2]?' id="'+l[2]+'"':'')+'>'+escapeHtml(l[1])+'</b></div>'}).join("")+
+      '<div class="total num"><span>Итого</span><span>'+total+(sub?' <small style="color:var(--muted);font-weight:500">≈ '+sub+'</small>':'')+'</span></div>';
     $("scrim").classList.add("on");$("sheet").classList.add("on");updateBuy();
     if(g){
       sheetArt=$("sArt");goLive(sheetArt,g);
+      var url="https://t.me/nft/"+g.n.replace(/[^A-Za-z0-9]/g,"")+"-"+g.no;
+      $("tgLink").onclick=function(){try{if(tg&&tg.openTelegramLink){tg.openTelegramLink(url);return}}catch(e){}window.open(url,"_blank")};
       // модель, фон и узор берём из данных подарка на Fragment
       getMeta(g).then(function(m){
         var at=m.attributes||[];
@@ -821,8 +782,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
         function show(id,a){var el=$(id);if(!el)return;if(!a){el.parentNode.remove();return}
           var r=a.rarity||a.rarity_per_mille&&(a.rarity_per_mille/10+"%")||"";
           el.innerHTML=escapeHtml(a.value)+(r?'<span class="rar-pill">'+escapeHtml(r)+'</span>':'')}
-        var md=pick(["model"]);if(md&&$("gmModel"))$("gmModel").textContent=md.value;
-        show("aModel",md);show("aBack",pick(["backdrop","background"]));show("aSym",pick(["symbol","pattern"]));
+        show("aModel",pick(["model"]));show("aBack",pick(["backdrop","background"]));show("aSym",pick(["symbol","pattern"]));
       }).catch(function(){["aModel","aBack","aSym"].forEach(function(id){var el=$(id);if(el)el.parentNode.remove()})});
     }
     if(tg&&tg.BackButton)try{tg.BackButton.show()}catch(e){}
