@@ -767,13 +767,16 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   function openSheet(lines,total,sub,g){
     if(sheetArt&&sheetArt._anim){try{sheetArt._anim.destroy()}catch(e){}}sheetArt=null;
     var art=g?'<div class="sheet-art art" id="sArt" style="'+artBg(g)+'">'+artImg(g)+'<span class="glyph">'+g.g+'</span>'+sparks(8)+'</div>'+
-      '<button class="tglink" id="tgLink">Открыть в Telegram</button>':"";
+      '<button class="tglink" id="tgLink">Написать продавцу в Telegram</button>':"";
     $("sheetLines").innerHTML=art+lines.map(function(l){return '<div><span>'+l[0]+'</span><b'+(l[2]?' id="'+l[2]+'"':'')+'>'+escapeHtml(l[1])+'</b></div>'}).join("")+
       '<div class="total num"><span>Итого</span><span>'+total+(sub?' <small style="color:var(--muted);font-weight:500">≈ '+sub+'</small>':'')+'</span></div>';
     $("scrim").classList.add("on");$("sheet").classList.add("on");updateBuy();
     if(g){
       sheetArt=$("sArt");goLive(sheetArt,g);
-      var url="https://t.me/nft/"+g.n.replace(/[^A-Za-z0-9]/g,"")+"-"+g.no;
+      // чат с продавцом, в поле ввода уже готовый текст про этот подарок
+      var nftUrl="https://t.me/nft/"+g.n.replace(/[^A-Za-z0-9]/g,"")+"-"+g.no;
+      var msg="Здравствуйте! Можно ли приобрести у вас "+g.n+" #"+g.no+" за "+fmt(g.p,2)+" TON? Нашёл его в Nova Market.\n"+nftUrl;
+      var url="https://t.me/"+String(g.owner||SHOP_OWNER).replace(/^@/,"")+"?text="+encodeURIComponent(msg);
       $("tgLink").onclick=function(){try{if(tg&&tg.openTelegramLink){tg.openTelegramLink(url);return}}catch(e){}window.open(url,"_blank")};
       // модель, фон и узор берём из данных подарка на Fragment
       getMeta(g).then(function(m){
