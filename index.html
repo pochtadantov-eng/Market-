@@ -400,6 +400,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   </div>
   <button class="ghost" id="tClose">Закрыть</button>
   <p class="tid num" id="tId"></p>
+  <p class="tid" id="tSrv"></p>
 </div></div>
 
 <div class="scrim" id="aScrim"></div>
@@ -489,14 +490,21 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
       .then(function(r){return r.json().catch(function(){return{}}).then(function(d){if(!r.ok)throw new Error(d.error||("Ошибка "+r.status));return d})});
   }
   var ADMIN=false,ME=null;
+  function srv(t){$("tSrv").textContent=t}
   function loadMe(){
-    if(!API||!tg||!tg.initData)return;
+    var u=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;
+    if(u&&u.id)$("tId").textContent="Ваш Telegram ID: "+u.id;
+    if(!API){srv("Сервер: не подключён");return}
+    if(!tg||!tg.initData){srv("Сервер: откройте магазин через бота, чтобы войти");return}
+    srv("Сервер: подключаемся…");
     api("GET","/me").then(function(me){
       ME=me;BALANCE=me.balance||0;$("balVal").textContent=fmt(BALANCE)+" ₽";
       $("tId").textContent="Ваш Telegram ID: "+me.id;
+      srv("Сервер: подключён"+(me.isAdmin?" · вы админ":" · вы не в ADMIN_IDS"));
       if(me.isAdmin){ADMIN=true;$("adminBtn").hidden=false}
-    }).catch(function(){});
+    }).catch(function(err){srv("Сервер: ошибка. "+(err&&err.message||"нет связи"))});
   }
+
 
   function artImg(g){return '<img alt="" loading="lazy" src="'+FRAG+g.slug+"-"+g.no+'.webp" onload="this.classList.add(\'ok\');this.parentNode.classList.add(\'real\')" onerror="this.remove()">'}
   var lottieCache={},metaCache={};

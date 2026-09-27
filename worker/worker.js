@@ -101,16 +101,18 @@ export async function verifyInitData(initData, botToken) {
   const hash = params.get("hash");
   if (!hash) return null;
   params.delete("hash");
-  params.delete("signature");
-  const checkString = [...params.entries()]
-    .map(([k, v]) => k + "=" + v)
-    .sort()
-    .join("\n");
   const enc = new TextEncoder();
   const secret = await hmac(enc.encode("WebAppData"), enc.encode(botToken));
-  const sig = await hmac(secret, enc.encode(checkString));
-  const hex = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  if (!timingSafeEqual(hex, hash)) return null;
+  const check = async (entries) => {
+    const str = entries.map(([k, v]) => k + "=" + v).sort().join("\n");
+    const sig = await hmac(secret, enc.encode(str));
+    return timingSafeEqual([...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join(""), hash);
+  };
+  // Хэш считается по всем полям, кроме hash (поле signature входит в строку).
+  // На всякий случай пробуем и без signature: так делали старые клиенты.
+  const all = [...params.entries()];
+  const ok = (await check(all)) || (await check(all.filter(([k]) => k !== "signature")));
+  if (!ok) return null;
   const authDate = Number(params.get("auth_date"));
   if (!authDate || Date.now() / 1000 - authDate > MAX_AUTH_AGE) return null;
   try {
