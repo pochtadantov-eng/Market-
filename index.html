@@ -207,6 +207,7 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 .lines .total span{color:var(--text)}
 .demo{font-size:13px;color:var(--muted);background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:12px}
 .pay{width:100%;border:0;border-radius:14px;padding:14px;font-weight:700;background:var(--ton);color:#fff}
+.pay:disabled{opacity:.6}
 .ghost{width:100%;border:0;background:none;color:var(--muted);padding:12px;margin-top:4px}
 
 .toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translate(-50%,-160%);z-index:20;background:var(--text);color:var(--bg);font-weight:600;font-size:14px;padding:10px 16px;border-radius:12px;transition:transform .25s;max-width:calc(100% - 32px)}
@@ -573,7 +574,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
 
   var fmt = function(n,d){return n.toLocaleString("ru-RU",{maximumFractionDigits:d==null?0:d})};
   var $ = function(id){return document.getElementById(id)};
-  var haptic = function(k){try{tg&&tg.HapticFeedback&&(k==="sel"?tg.HapticFeedback.selectionChanged():tg.HapticFeedback.impactOccurred(k||"light"))}catch(e){}};
+  var haptic = function(k){try{tg&&tg.HapticFeedback&&(k==="sel"?tg.HapticFeedback.selectionChanged():k==="error"?tg.HapticFeedback.notificationOccurred("error"):tg.HapticFeedback.impactOccurred(k||"light"))}catch(e){}};
 
   var state={tab:"nft",filter:"all",gift:null,pack:2,who:"me",notify:false};
   try{state.notify=localStorage.getItem("nova_notify")==="1"}catch(e){}
@@ -651,6 +652,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   $("nftGrid").addEventListener("click",function(e){
     var b=e.target.closest(".gift");if(!b)return;
     haptic();var g=GIFTS[+b.dataset.i];
+    pend={body:{type:"gift",id:gkey(g)},rub:MARKET?Math.round(g.p*MARKET):0,gift:g};
     openSheet([["Подарок",g.n+" #"+fmt(g.no)],["Модель","…","aModel"],["Фон","…","aBack"],["Узор","…","aSym"],["Владелец",g.owner||SHOP_OWNER],["Получатель","ваш аккаунт"]],
       giftRub(g),MARKET?fmt(g.p,1)+" TON":null,g);
   });
@@ -727,7 +729,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   });
 
   /* Buy button (Telegram MainButton или своя кнопка) */
-  var buyAction=null;
+  var buyAction=null,pend=null;
   function updateBuy(){
     var label=null,price="",gold=false;
     if(state.tab==="stars"){var n=starVal(),ok=n>=STAR_MIN&&n<=STAR_MAX;label="Купить "+fmt(n)+" звёзд";price=ok?fmt(starPrice(n),2)+" ₽":"";gold=true;
@@ -735,6 +737,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
         if(!ok){toast("Можно купить от "+fmt(STAR_MIN)+" до "+fmt(STAR_MAX)+" звёзд");$("starAmt").focus();return}
         var to=state.who==="friend"?($("starsUser").value.trim()):"";
         if(state.who==="friend"&&!to){toast("Укажите username получателя");$("starsUser").focus();return}
+        pend={body:{type:"stars",amount:n,to:to},rub:starPrice(n)};
         openSheet([["Товар",fmt(n)+" Telegram Stars"],["Цена за звезду",fmt(STAR_TIERS[tierOf(n)].rub,2)+" ₽"],["Получатель",to?"@"+to.replace(/^@/,""):"ваш аккаунт"]],price,null);
       }}
     else if(state.tab==="ton"){var v=tonVal();label="Купить "+fmt(v,2)+" TON";price=RATE?fmt(v*RATE)+" ₽":"";
@@ -744,6 +747,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
         if(v>TON_MAX){toast("Максимум "+fmt(TON_MAX)+" TON за раз");return}
         var w=$("tonWallet").value.trim();
         if(w.length<20){toast("Вставьте адрес кошелька TON");$("tonWallet").focus();return}
+        pend={body:{type:"ton",amount:v,wallet:w},rub:Math.round(v*RATE)};
         openSheet([["Товар",fmt(v,2)+" TON"],["Кошелёк",w.slice(0,6)+"…"+w.slice(-4)],["Курс","1 TON = "+fmt(RATE)+" ₽"]],price,null);
       }}
     var show=!!label&&!$("sheet").classList.contains("on")&&!$("tSheet").classList.contains("on");
@@ -910,9 +914,26 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   });
   $("closeSheet").addEventListener("click",closeSheet);
   if(tg&&tg.BackButton)try{tg.BackButton.onClick(closeSheet)}catch(e){}
+  function setBalance(v){BALANCE=v;$("balVal").textContent=fmt(BALANCE)+" ₽"}
+  // Оплата с баланса. Цену и остаток проверяет сервер, здесь только быстрая проверка, чтобы не гонять запрос зря.
   $("payBtn").addEventListener("click",function(){
-    // Здесь будет реальная оплата (Telegram Stars invoice / TON Connect)
-    haptic("heavy");closeSheet();burst(state.tab==="ton"?"#1AA3F0":state.tab==="stars"?"#F6B940":"#3DD68C");toast("Демо: заказ принят, оплата не подключена");
+    var btn=this;if(!pend||btn.disabled)return;
+    if(!API||!tg||!tg.initData){toast("Откройте магазин через бота, чтобы купить");return}
+    if(!pend.rub){toast("Курс ещё загружается, попробуйте через пару секунд");refreshRate(true);return}
+    if(BALANCE<pend.rub){haptic("error");toast("Недостаточно средств: не хватает "+fmt(Math.ceil(pend.rub-BALANCE))+" ₽");closeSheet();openTop();return}
+    var p=pend,color=state.tab==="ton"?"#1AA3F0":state.tab==="stars"?"#F6B940":"#3DD68C";
+    btn.disabled=true;btn.textContent="Оплачиваем…";
+    api("POST","/buy",Object.assign({expect:p.rub},p.body)).then(function(d){
+      haptic("heavy");setBalance(d.balance);closeSheet();burst(color);
+      if(d.gifts)useGiftList(d.gifts);
+      toast(d.notified?"Готово! Подробности отправили вам в чат с ботом":"Готово! Нажмите Start в боте, чтобы получать уведомления");
+    }).catch(function(err){
+      haptic("error");var d=err.data||{};
+      if(typeof d.balance==="number")setBalance(d.balance);
+      if(d.sold){closeSheet();loadGiftList()}
+      if(d.price)p.rub=d.price;
+      toast(err.message||"Нет связи с сервером");
+    }).then(function(){btn.disabled=false;btn.textContent="Оплатить"});
   });
 
   var tt;function toast(t){var el=$("toast");el.textContent=t;el.classList.add("on");clearTimeout(tt);tt=setTimeout(function(){el.classList.remove("on")},2200)}
