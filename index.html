@@ -39,7 +39,19 @@ button{cursor:pointer}
 .brand b{font:700 16px/1.1 var(--display);letter-spacing:.01em}
 .brand span{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rate{margin-left:auto;display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:12.5px;color:var(--muted);flex:none}
-.rate i{width:7px;height:7px;border-radius:50%;background:var(--ok);display:block}
+.rate .bal-lbl{color:var(--muted)}
+.rate .plus{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--ton);color:#fff;font-weight:700;font-size:15px;line-height:1;margin-right:-4px}
+button.rate{cursor:pointer;padding:5px 8px 5px 12px}
+.topup-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:var(--surface-2);padding:4px;border-radius:14px;margin-bottom:14px}
+.topup-tabs button{border:0;background:none;padding:9px 4px;border-radius:10px;color:var(--muted);font-weight:500;font-size:14px}
+.topup-tabs button[aria-pressed="true"]{background:var(--bg);color:var(--text);font-weight:600}
+.topup-amt{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:0 14px;margin-bottom:10px}
+.topup-amt input{flex:1;min-width:0;background:none;border:0;outline:none;padding:13px 0;font:700 22px/1.2 var(--display)}
+.topup-amt span{color:var(--muted);font-weight:600}
+.topup-quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.topup-quick button{border:1px solid var(--line);background:var(--surface-2);border-radius:12px;padding:9px 0;font-weight:600;font-size:14px}
+.crypto-box{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;font-size:14.5px;line-height:1.5}
+.crypto-box b{color:var(--ton)}
 .rate b{color:var(--text);font-weight:600}
 
 /* section head */
@@ -237,7 +249,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   <header class="top">
     <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 9.5 12 4l8 5.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><path d="M9 20v-6h6v6" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></div>
     <div class="brand"><b>Nova Market</b><span id="hello">Подарки, звёзды и TON</span></div>
-    <div class="rate num" title="Наша цена TON: биржевой курс минус 15%"><i id="rateDot"></i>1 TON = <b id="rateVal">…</b></div>
+    <button class="rate num" id="balBtn" aria-label="Баланс, пополнить"><span class="bal-lbl">Баланс</span><b id="balVal">0 ₽</b><span class="plus" aria-hidden="true">+</span></button>
   </header>
 
   <!-- NFT -->
@@ -351,6 +363,28 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   <button class="ghost" id="closeSheet">Отмена</button>
 </div></div>
 
+<div class="scrim" id="tScrim"></div>
+<div class="sheet" id="tSheet" role="dialog" aria-modal="true" aria-labelledby="tTitle"><div class="in">
+  <div class="grab"></div>
+  <h2 id="tTitle">Пополнить баланс</h2>
+  <div class="topup-tabs" id="tTabs">
+    <button data-m="rub" aria-pressed="true">Рубли</button>
+    <button data-m="stars" aria-pressed="false">Звёзды</button>
+    <button data-m="crypto" aria-pressed="false">Крипта</button>
+  </div>
+  <div id="tAmtWrap">
+    <label class="topup-amt"><input id="tAmt" class="num" inputmode="numeric" value="500" aria-label="Сумма пополнения"><span id="tUnit">₽</span></label>
+    <div class="topup-quick" id="tQuick"></div>
+    <div class="demo" id="tNote">Оплата пока не подключена, деньги не списываются.</div>
+    <button class="pay" id="tPay">Пополнить</button>
+  </div>
+  <div id="tCrypto" hidden>
+    <div class="crypto-box">Пополнение криптовалютой пока вручную. Напишите в личные сообщения <b id="tAdmin"></b>, укажите сумму и валюту, и вам пришлют реквизиты.</div>
+    <button class="pay" id="tDm">Написать в личку</button>
+  </div>
+  <button class="ghost" id="tClose">Закрыть</button>
+</div></div>
+
 <div class="toast" id="toast" role="status"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie_light_canvas.min.js"></script>
@@ -461,7 +495,6 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   function updGiftPrices(){[].forEach.call(document.querySelectorAll(".price[data-p]"),function(el){el.textContent=giftRub(GIFTS[+el.dataset.p])})}
   function applyRate(market,ts){
     MARKET=market;RATE=Math.floor(market*(1-TON_DISCOUNT));
-    $("rateVal").textContent=fmt(RATE)+" ₽";$("rateDot").style.background="";
     $("tonMarket").textContent=fmt(MARKET,2)+" ₽";
     $("tonOur").textContent=fmt(RATE)+" ₽";
     updGiftPrices();
@@ -487,7 +520,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
       var t=Date.now();try{localStorage.setItem("nova_ton_rate",JSON.stringify({v:v,t:t}))}catch(e){}
       applyRate(v,t);
     }).catch(function(){
-      if(!MARKET){$("rateVal").textContent="нет связи";$("rateDot").style.background="#E5484D";updateBuy()}
+      if(!MARKET){$("tonMarket").textContent="нет связи";updateBuy()}
     });
   }
 
@@ -610,7 +643,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
         if(w.length<20){toast("Вставьте адрес кошелька TON");$("tonWallet").focus();return}
         openSheet([["Товар",fmt(v,2)+" TON"],["Кошелёк",w.slice(0,6)+"…"+w.slice(-4)],["Курс","1 TON = "+fmt(RATE)+" ₽"]],price,null);
       }}
-    var show=!!label&&!$("sheet").classList.contains("on");
+    var show=!!label&&!$("sheet").classList.contains("on")&&!$("tSheet").classList.contains("on");
     if(tg&&tg.MainButton&&tg.platform!=="unknown"){
       try{
         if(show){tg.MainButton.setParams({text:label+(price?" · "+price:""),color:gold?"#F6B940":"#1AA3F0",text_color:gold?"#231800":"#FFFFFF",is_visible:true})}
@@ -658,6 +691,34 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   }
   function escapeHtml(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
   $("scrim").addEventListener("click",closeSheet);
+
+  /* Баланс и пополнение. Баланс будет приходить с сервера, пока всегда 0 ₽. */
+  var BALANCE=0, ADMIN_DM=SHOP_OWNER, topMode="rub";
+  var TOPUP={rub:{unit:"₽",quick:[100,500,1000,5000],def:500,min:100},stars:{unit:"звёзд",quick:[100,500,1000,5000],def:500,min:50}};
+  $("balVal").textContent=fmt(BALANCE)+" ₽";
+  $("tAdmin").textContent=ADMIN_DM;
+  function setTop(m){
+    topMode=m;[].forEach.call($("tTabs").children,function(b){b.setAttribute("aria-pressed",b.dataset.m===m)});
+    $("tCrypto").hidden=m!=="crypto";$("tAmtWrap").hidden=m==="crypto";
+    if(m!=="crypto"){var c=TOPUP[m];$("tUnit").textContent=c.unit;$("tAmt").value=c.def;
+      $("tQuick").innerHTML=c.quick.map(function(v){return '<button data-v="'+v+'">'+fmt(v)+'</button>'}).join("")}
+  }
+  function openTop(){setTop(topMode);$("tScrim").classList.add("on");$("tSheet").classList.add("on");updateBuy();haptic()}
+  function closeTop(){$("tScrim").classList.remove("on");$("tSheet").classList.remove("on");updateBuy()}
+  $("balBtn").addEventListener("click",openTop);
+  $("tScrim").addEventListener("click",closeTop);$("tClose").addEventListener("click",closeTop);
+  $("tTabs").addEventListener("click",function(e){var b=e.target.closest("button");if(b){haptic("sel");setTop(b.dataset.m)}});
+  $("tQuick").addEventListener("click",function(e){var b=e.target.closest("button");if(b){haptic("sel");$("tAmt").value=b.dataset.v}});
+  $("tPay").addEventListener("click",function(){
+    var v=parseInt(String($("tAmt").value).replace(/\D/g,""),10)||0,c=TOPUP[topMode];
+    if(v<c.min){toast("Минимум "+fmt(c.min)+" "+c.unit);return}
+    haptic("medium");closeTop();toast("Демо: пополнение на "+fmt(v)+" "+c.unit+" пока не подключено");
+  });
+  $("tDm").addEventListener("click",function(){
+    var url="https://t.me/"+ADMIN_DM.replace(/^@/,"");
+    try{if(tg&&tg.openTelegramLink){tg.openTelegramLink(url);return}}catch(e){}
+    window.open(url,"_blank");
+  });
   $("closeSheet").addEventListener("click",closeSheet);
   if(tg&&tg.BackButton)try{tg.BackButton.onClick(closeSheet)}catch(e){}
   $("payBtn").addEventListener("click",function(){
