@@ -330,7 +330,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     <div class="label">Кошелёк получателя</div>
     <label class="field"><input id="tonWallet" placeholder="UQ… адрес кошелька TON" autocomplete="off"></label>
     <div class="facts">
-      <div class="fact"><span>Биржевой курс</span><b class="num" id="tonMarket">…</b></div><div class="fact"><span>Наша цена, −15%</span><b class="num" id="tonOur" style="color:var(--ton)">…</b></div><div class="fact"><span>Минимум</span><b class="num">1 TON</b></div>
+      <div class="fact"><span>Биржевой курс</span><b class="num" id="tonMarket">…</b></div><div class="fact"><span>Наша цена, −15%</span><b class="num" id="tonOur" style="color:var(--ton)">…</b></div><div class="fact"><span>Мин. / макс.</span><b class="num">1 / 5 000 TON</b></div>
       <div class="fact"><span>Курс обновлён</span><b class="num" id="tonUpd">…</b></div>
     </div>
   </section>
@@ -431,6 +431,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   var tg = window.Telegram && window.Telegram.WebApp;
   // TON: берём биржевой курс TON/RUB, обновляем каждые 5 минут, продаём на 15% дешевле
   var TON_DISCOUNT = 0.15;
+  var TON_MAX = 5000;        // максимум TON за одну покупку
   var MARKET = null;         // биржевой курс, ₽ за 1 TON
   var RATE = null;           // наша цена, ₽ за 1 TON
   var RATE_TTL = 5*60*1000;  // 5 минут
@@ -664,7 +665,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
       $("tonRub").textContent=fmt(shown)+" ₽";if(k<1)raf=requestAnimationFrame(step)})(t0);
     updateBuy();
   }
-  $("tonAmt").addEventListener("input",updTon);
+  $("tonAmt").addEventListener("input",function(){if(tonVal()>TON_MAX){this.value=TON_MAX;toast("Максимум "+fmt(TON_MAX)+" TON")}updTon()});
   $("tonQuick").addEventListener("click",function(e){
     var b=e.target.closest("button");if(!b)return;
     $("tonAmt").value=b.dataset.v;haptic("sel");updTon();
@@ -696,6 +697,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
       buyAction=function(){
         if(!RATE){toast("Курс ещё загружается, попробуйте через пару секунд");refreshRate(true);return}
         if(v<1){toast("Минимальная сумма 1 TON");return}
+        if(v>TON_MAX){toast("Максимум "+fmt(TON_MAX)+" TON за раз");return}
         var w=$("tonWallet").value.trim();
         if(w.length<20){toast("Вставьте адрес кошелька TON");$("tonWallet").focus();return}
         openSheet([["Товар",fmt(v,2)+" TON"],["Кошелёк",w.slice(0,6)+"…"+w.slice(-4)],["Курс","1 TON = "+fmt(RATE)+" ₽"]],price,null);
@@ -823,6 +825,8 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     for(var i=0;i<28;i++)P.push({x:Math.random(),y:Math.random(),r:2+Math.random()*5,v:.00025+Math.random()*.0007,ph:Math.random()*6.28,rot:Math.random()*6.28,star:gold&&i%3===0});
     function frame(t){
       if(cv.offsetParent===null){requestAnimationFrame(frame);return}
+      // холст создаётся на скрытой вкладке с нулевым размером, поэтому подгоняем размер при показе
+      if(cv.clientWidth!==W||cv.clientHeight!==H)size();
       c.clearRect(0,0,W,H);
       {
         for(var w=0;w<3;w++){c.beginPath();c.moveTo(0,H);
