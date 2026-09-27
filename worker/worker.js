@@ -162,9 +162,12 @@ async function fragmentFloor(slug) {
   });
   if (!res.ok) return null;
   const html = await res.text();
-  const prices = [...html.matchAll(/icon-ton[^"]*"[^>]*>\s*([\d,]+(?:\.\d+)?)\s*</g)]
-    .map((x) => Number(x[1].replace(/,/g, "")))
-    .filter((n) => n > 0);
+  // Берём цену только из карточек подарков в выдаче (отсортирована по цене),
+  // остальные числа на странице (статистика, прошлые продажи) не трогаем.
+  const prices = html.split(/class="[^"]*tm-grid-item[\s"]/).slice(1).map((card) => {
+    const m = card.match(/icon-ton[^"]*"[^>]*>\s*([\d,]+(?:\.\d+)?)\s*</);
+    return m ? Number(m[1].replace(/,/g, "")) : 0;
+  }).filter((n) => n > 0);
   return prices.length ? Math.min(...prices) : null;
 }
 
