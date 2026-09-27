@@ -186,8 +186,9 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 .gift .art::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.22) 50%,transparent 65%);transform:translateX(-120%);animation:shine 4.5s ease-in-out infinite;animation-delay:calc(var(--i,0)*.35s);pointer-events:none}
 @keyframes rise{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes shine{0%,70%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
-.sheet-art{aspect-ratio:1/1;width:180px;max-width:60%;margin:0 auto 14px;border-radius:22px;position:relative;display:grid;place-items:center;font-size:84px;overflow:hidden}
-.sheet-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.sheet-art{aspect-ratio:1/1;width:100%;max-width:340px;margin:0 auto 14px;border-radius:22px;position:relative;display:grid;place-items:center;font-size:84px;overflow:hidden}
+.sheet-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.sheet-art .glyph{font-size:120px}
 .sheet-art.real{background:var(--surface-2)!important}
 
 /* animated heroes */
@@ -373,6 +374,8 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   // Реальные коллекции Telegram. Картинки и анимации берутся с nft.fragment.com по slug и номеру.
   // Каталог-пример: позже заменить на подарки, которые реально лежат на аккаунте магазина.
   var FRAG="https://nft.fragment.com/gift/";
+  // Владелец подарков по умолчанию (аккаунт магазина). У подарка можно указать своё поле owner.
+  var SHOP_OWNER="@Claps228";
   var GIFTS=[
     {n:"Plush Pepe",slug:"plushpepe",no:1843,p:640,g:"🐸",bg:["#4C9A5A","#1F4A2A"],rare:true},
     {n:"Durov's Cap",slug:"durovscap",no:512,p:210,g:"🧢",bg:["#5B6CF0","#262E75"],rare:true},
@@ -499,7 +502,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   $("nftGrid").addEventListener("click",function(e){
     var b=e.target.closest(".gift");if(!b)return;
     haptic();var g=GIFTS[+b.dataset.i];
-    openSheet([["Подарок",g.n+" #"+fmt(g.no)],["Модель","…","aModel"],["Фон","…","aBack"],["Узор","…","aSym"],["Получатель","ваш аккаунт"]],
+    openSheet([["Подарок",g.n+" #"+fmt(g.no)],["Модель","…","aModel"],["Фон","…","aBack"],["Узор","…","aSym"],["Владелец",g.owner||SHOP_OWNER],["Получатель","ваш аккаунт"]],
       fmt(g.p,1)+" TON",MARKET?fmt(g.p*MARKET)+" ₽":null,g);
   });
 
