@@ -21,5 +21,6 @@
 |---|---|---|
 | GET | `/gifts` | все |
 | GET | `/me` | с подписью Telegram |
+| POST | `/buy` `{type:"gift", id}` · `{type:"stars", amount, to?}` · `{type:"ton", amount, wallet}` | с подписью Telegram: списывает баланс, при нехватке ошибка 402; пишет покупателю и админам в бота |
 | POST | `/admin/gifts` `{link, price_ton, name?, rare?, new?}` | админ |
 | DELETE | `/admin/gifts/<slug>-<номер>` | админ |

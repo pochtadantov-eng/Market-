@@ -10,6 +10,14 @@
 
 const MAX_AUTH_AGE = 24 * 60 * 60; // initData действительна сутки
 const FLOOR_DISCOUNT = 0.2; // цена подарка = флор минус 20%
+// Те же правила цен, что в мини-приложении (index.html). Сервер считает цену сам и клиенту не верит.
+const TON_DISCOUNT = 0.15; // TON продаём на 15% дешевле биржи
+const TON_MIN = 1, TON_MAX = 5000;
+const RATE_TTL = 5 * 60 * 1000; // курс обновляем раз в 5 минут
+const STAR_MIN = 100, STAR_MAX = 100000;
+const STAR_TIERS = [ { from: 100, rub: 1.3 }, { from: 500, rub: 1.1 }, { from: 2000, rub: 1.0 }, { from: 10000, rub: 0.9 } ];
+const PRICE_SLACK = 0.03; // если цена выросла больше чем на 3% с того, что видел покупатель, просим подтвердить заново
+const FRAG = "https://nft.fragment.com/gift/";
 
 export default {
   async fetch(request, env) {
@@ -46,6 +54,12 @@ export default {
 
       if (request.method === "GET" && path === "/me") {
         return json({ id: user.id, username: user.username || null, isAdmin, balance: me.balance || 0 });
+      }
+
+      // Покупка за баланс: {type:"gift", id} | {type:"stars", amount, to?} | {type:"ton", amount, wallet}; expect = цена, которую видел покупатель
+      if (request.method === "POST" && path === "/buy") {
+        const body = await request.json().catch(() => ({}));
+        return buy(env, origin, token, user, body, json);
       }
 
       if (!isAdmin) return json({ error: "Нет доступа" }, 403);
@@ -120,6 +134,152 @@ export default {
     }
   },
 };
+
+async function buy(env, origin, token, tgUser, body, json) {
+  const type = String(body.type || "");
+  let rub, item, gift = null, gifts = null;
+  if (type === "gift") {
+    gifts = await loadGifts(env, origin);
+    gift = gifts.find((g) => g.id === String(body.id || ""));
+    if (!gift) return json({ error: "Этот подарок уже купили или сняли с продажи", sold: true }, 410);
+    const market = await tonRub();
+    if (!market) return json({ error: "Не удалось узнать курс TON, попробуйте через минуту" }, 503);
+    rub = Math.round(gift.price_ton * market);
+    item = gift.name + " #" + gift.link.split("-").pop();
+  } else if (type === "stars") {
+    const n = Math.floor(Number(body.amount));
+    if (!(n >= STAR_MIN && n <= STAR_MAX)) return json({ error: "Можно купить от " + STAR_MIN + " до " + STAR_MAX + " звёзд" }, 400);
+    const tier = STAR_TIERS.filter((t) => n >= t.from).pop();
+    rub = Math.round(n * tier.rub * 100) / 100;
+    const to = String(body.to || "").trim().replace(/^@/, "");
+    if (to && !/^[A-Za-z0-9_]{4,32}$/.test(to)) return json({ error: "Неверный username получателя" }, 400);
+    item = n + " Telegram Stars" + (to ? " для @" + to : "");
+  } else if (type === "ton") {
+    const v = Math.round(Number(body.amount) * 100) / 100;
+    if (!(v >= TON_MIN && v <= TON_MAX)) return json({ error: "Можно купить от " + TON_MIN + " до " + TON_MAX + " TON" }, 400);
+    const wallet = String(body.wallet || "").trim();
+    if (!/^[A-Za-z0-9_:\-]{20,80}$/.test(wallet)) return json({ error: "Неверный адрес кошелька TON" }, 400);
+    const market = await tonRub();
+    if (!market) return json({ error: "Не удалось узнать курс TON, попробуйте через минуту" }, 503);
+    rub = Math.round(v * Math.floor(market * (1 - TON_DISCOUNT)));
+    item = v + " TON на кошелёк " + wallet;
+  } else {
+    return json({ error: "Неизвестный товар" }, 400);
+  }
+
+  const expect = Number(body.expect);
+  if (expect > 0 && rub > expect * (1 + PRICE_SLACK)) return json({ error: "Цена обновилась, теперь " + fmtRub(rub), price: rub }, 409);
+
+  // Баланс перечитываем прямо перед списанием. Главная проверка здесь: денег меньше цены — ничего не списываем.
+  const u = (await getUser(env, tgUser.id)) || newUser(tgUser);
+  const balance = u.balance || 0;
+  if (balance < rub) return json({ error: "Недостаточно средств: нужно " + fmtRub(rub) + ", на балансе " + fmtRub(balance), need: rub, balance }, 402);
+  u.balance = Math.round((balance - rub) * 100) / 100;
+  await saveUser(env, u, false);
+
+  // Уникальный подарок продаётся один раз: убираем его с витрины
+  if (gift) await env.DB.put("gifts", JSON.stringify(gifts.filter((g) => g.id !== gift.id)));
+
+  const order = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), type, item, rub, user: u.id, username: u.username || null, at: Date.now() };
+  if (gift) order.link = gift.link;
+  const orders = (await env.DB.get("orders", "json")) || [];
+  orders.unshift(order);
+  await env.DB.put("orders", JSON.stringify(orders.slice(0, 500)));
+
+  // Сообщения в бота. Ошибка отправки не отменяет покупку.
+  const notified = await notifyBuyer(token, u, order, gift).catch(() => false);
+  await notifyAdmins(env, token, u, order).catch(() => {});
+
+  return json({ ok: true, balance: u.balance, order, notified, gifts: gift ? gifts.filter((g) => g.id !== gift.id) : undefined });
+}
+
+// Курс TON/RUB: CoinGecko, запасной вариант Binance TON/USDT × курс доллара ЦБ. Держим в памяти 5 минут.
+let rateCache = { v: 0, t: 0 };
+async function tonRub() {
+  if (rateCache.v && Date.now() - rateCache.t < RATE_TTL) return rateCache.v;
+  let v = 0;
+  try {
+    const d = await (await fetch("https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=rub", { headers: { Accept: "application/json" } })).json();
+    v = Number(d["the-open-network"].rub) || 0;
+  } catch {}
+  if (!v) {
+    try {
+      const [b, c] = await Promise.all([
+        fetch("https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT").then((r) => r.json()),
+        fetch("https://www.cbr-xml-daily.ru/daily_json.js").then((r) => r.json()),
+      ]);
+      v = parseFloat(b.price) * c.Valute.USD.Value || 0;
+    } catch {}
+  }
+  if (v > 0) rateCache = { v, t: Date.now() };
+  return rateCache.v || 0; // если биржи молчат, берём последний известный курс
+}
+
+function fmtRub(n) {
+  return n.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " ₽";
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+}
+
+async function tgApi(token, method, payload) {
+  const isForm = payload instanceof FormData;
+  const res = await fetch("https://api.telegram.org/bot" + token + "/" + method, {
+    method: "POST",
+    headers: isForm ? undefined : { "Content-Type": "application/json" },
+    body: isForm ? payload : JSON.stringify(payload),
+  });
+  const d = await res.json().catch(() => ({}));
+  return !!d.ok;
+}
+
+// Покупателю в чат с ботом: анимация подарка (стикер из его Lottie с Fragment), затем описание.
+async function notifyBuyer(token, u, order, gift) {
+  const chat_id = u.id;
+  const wait = "⏳ Подарок будет выведен на ваш аккаунт в течение нескольких часов. Возможна задержка, это нормально: всё придёт.";
+  let text, sticker = false, extra = {};
+  if (gift) {
+    const key = gift.id; // slug-номер, как на nft.fragment.com
+    sticker = await sendGiftSticker(token, chat_id, key).catch(() => false);
+    const attrs = await fetch(FRAG + key + ".json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const at = (attrs && attrs.attributes) || [];
+    const pick = (names) => at.find((a) => names.includes(String(a.trait_type || a.type || "").toLowerCase()));
+    const rows = [["Модель", pick(["model"])], ["Фон", pick(["backdrop", "background"])], ["Узор", pick(["symbol", "pattern"])]]
+      .filter(([, a]) => a && a.value)
+      .map(([k, a]) => k + ": <b>" + esc(a.value) + "</b>");
+    text = ["🎁 <b>Покупка оформлена!</b>", "", "<b>" + esc(order.item) + "</b>", "Коллекция Telegram", ...rows, "",
+      "Списано: <b>" + fmtRub(order.rub) + "</b>", "Остаток на балансе: " + fmtRub(u.balance), "", wait].join("\n");
+    extra.reply_markup = { inline_keyboard: [[{ text: "Посмотреть подарок", url: gift.link }]] };
+    // Не получилось со стикером: пусть Telegram покажет анимированное превью подарка по ссылке над текстом
+    extra.link_preview_options = sticker ? { is_disabled: true } : { url: gift.link, prefer_large_media: true, show_above_text: true };
+  } else {
+    const emoji = order.type === "stars" ? "⭐️" : "💎";
+    text = [emoji + " <b>Покупка оформлена!</b>", "", "<b>" + esc(order.item) + "</b>", "",
+      "Списано: <b>" + fmtRub(order.rub) + "</b>", "Остаток на балансе: " + fmtRub(u.balance), "",
+      wait.replace("Подарок будет выведен на ваш аккаунт", order.type === "stars" ? "Звёзды будут зачислены" : "TON будут отправлены на кошелёк")].join("\n");
+    extra.link_preview_options = { is_disabled: true };
+  }
+  return tgApi(token, "sendMessage", { chat_id, text, parse_mode: "HTML", ...extra });
+}
+
+// Telegram принимает анимированные стикеры .tgs: это Lottie JSON, сжатый gzip.
+async function sendGiftSticker(token, chat_id, key) {
+  const res = await fetch(FRAG + key + ".lottie.json");
+  if (!res.ok) return false;
+  const tgs = await new Response(res.body.pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+  const form = new FormData();
+  form.append("chat_id", String(chat_id));
+  form.append("sticker", new Blob([tgs], { type: "application/x-tgsticker" }), key + ".tgs");
+  return tgApi(token, "sendSticker", form);
+}
+
+// Админам: кто и что купил, чтобы вывести заказ
+async function notifyAdmins(env, token, u, order) {
+  const who = u.username ? "@" + u.username : esc(u.name || "без имени");
+  const text = "🛒 <b>Новый заказ</b>\n" + esc(order.item) + "\nСумма: " + fmtRub(order.rub) + "\nПокупатель: " + who + " (ID <code>" + u.id + "</code>)" + (order.link ? "\n" + order.link : "");
+  await Promise.all(adminIds(env).map((id) => tgApi(token, "sendMessage", { chat_id: id, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } })));
+}
 
 function newUser(tgUser) {
   return { id: tgUser.id, username: tgUser.username || null, name: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" "), balance: 0, banned: false, first_seen: Date.now(), last_seen: Date.now() };
