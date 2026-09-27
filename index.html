@@ -200,6 +200,10 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 @property --a{syntax:"<angle>";inherits:false;initial-value:0deg}
 @keyframes orbit{to{--a:360deg}}
 .quick button{transition:transform .12s,background .15s}
+.swap.gold{--ton:#F6B940}
+.star-coin{background:var(--star-soft);color:var(--star)}
+#starRange{width:100%;margin:14px 0 0;accent-color:var(--star);height:28px}
+.pack .range{font-size:12.5px;color:var(--muted)}
 .quick button:active{transform:scale(.94);background:var(--ton-soft)}
 .burst{position:fixed;inset:0;pointer-events:none;z-index:30}
 section[role=tabpanel]:not([hidden]){animation:fade .3s both}
@@ -214,7 +218,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   <header class="top">
     <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 9.5 12 4l8 5.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><path d="M9 20v-6h6v6" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></div>
     <div class="brand"><b>Nova Market</b><span id="hello">Подарки, звёзды и TON</span></div>
-    <div class="rate num" title="Примерный курс, демо"><i></i>1 TON ≈ <b id="rateVal">280 ₽</b></div>
+    <div class="rate num" title="Наша цена TON: биржевой курс минус 15%"><i id="rateDot"></i>1 TON = <b id="rateVal">…</b></div>
   </header>
 
   <!-- NFT -->
@@ -243,6 +247,18 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
       <button data-who="friend" aria-pressed="false">Другу</button>
     </div>
     <label class="field" id="starsUserField" hidden><span class="pre">@</span><input id="starsUser" placeholder="username получателя" autocomplete="off"></label>
+    <div class="swap gold">
+      <div class="row">
+        <input id="starAmt" class="num" inputmode="numeric" value="500" aria-label="Количество звёзд">
+        <span class="coin star-coin"><svg viewBox="0 0 24 24"><path d="m12 2.8 2.8 5.8 6.3.9-4.6 4.5 1.1 6.3L12 17.3l-5.6 3 1.1-6.3-4.6-4.5 6.3-.9z" fill="#F6B940"/></svg>Stars</span>
+      </div>
+      <div class="sub num">К оплате: <b id="starRub">550 ₽</b> · <span id="starPer">1,1 ₽ за звезду</span></div>
+      <input type="range" id="starRange" min="0" max="1000" value="0" aria-label="Количество звёзд, ползунок">
+      <div class="quick" id="starQuick">
+        <button data-v="100">100</button><button data-v="500">500</button><button data-v="2000">2 000</button><button data-v="10000">10 000</button>
+      </div>
+    </div>
+    <div class="label">Цена за звезду</div>
     <div class="packs" id="packs"></div>
   </section>
 
@@ -267,8 +283,8 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     <div class="label">Кошелёк получателя</div>
     <label class="field"><input id="tonWallet" placeholder="UQ… адрес кошелька TON" autocomplete="off"></label>
     <div class="facts">
-      <div class="fact"><span>Минимум</span><b class="num">1 TON</b></div>
-      <div class="fact"><span>Зачисление</span><b>до 5 минут</b></div>
+      <div class="fact"><span>Биржевой курс</span><b class="num" id="tonMarket">…</b></div><div class="fact"><span>Наша цена, −15%</span><b class="num" id="tonOur" style="color:var(--ton)">…</b></div><div class="fact"><span>Минимум</span><b class="num">1 TON</b></div>
+      <div class="fact"><span>Курс обновлён</span><b class="num" id="tonUpd">…</b></div>
     </div>
   </section>
 
@@ -322,8 +338,19 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
 <script>
 (function(){
   var tg = window.Telegram && window.Telegram.WebApp;
-  var RATE = 280;            // ₽ за 1 TON, демо-курс
-  var STAR_RUB = 1.69;       // ₽ за 1 звезду, демо
+  // TON: берём биржевой курс TON/RUB, обновляем раз в час, продаём на 15% дешевле
+  var TON_DISCOUNT = 0.15;
+  var MARKET = null;         // биржевой курс, ₽ за 1 TON
+  var RATE = null;           // наша цена, ₽ за 1 TON
+  var RATE_TTL = 60*60*1000; // 1 час
+  // Звёзды: цена за 1 звезду зависит от количества
+  var STAR_MIN = 100, STAR_MAX = 100000;
+  var STAR_TIERS = [
+    {from:100,   to:499,    rub:1.3},
+    {from:500,   to:1999,   rub:1.1},
+    {from:2000,  to:9999,   rub:1.0},
+    {from:10000, to:100000, rub:0.9}
+  ];
 
   var TON_SVG='<svg class="ton-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#1AA3F0"/><path d="M7.4 7.5h9.2c.7 0 1.1.7.8 1.3L12.6 17a.7.7 0 0 1-1.2 0L6.6 8.8c-.3-.6.1-1.3.8-1.3Zm4 1.3H8.3l3.1 5.4zm1.2 0v5.4l3.1-5.4z" fill="#fff"/></svg>';
   var STAR_SVG='<svg viewBox="0 0 24 24"><path d="m12 2.8 2.8 5.8 6.3.9-4.6 4.5 1.1 6.3L12 17.3l-5.6 3 1.1-6.3-4.6-4.5 6.3-.9z" fill="#F6B940"/></svg>';
@@ -346,9 +373,6 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   ];
   function artImg(g){return '<img alt="" loading="lazy" src="'+FRAG+g.slug+"-"+g.no+'.webp" onload="this.classList.add(\'ok\');this.parentNode.classList.add(\'real\')" onerror="this.remove()">'}
   function artBg(g){return 'background:radial-gradient(circle at 50% 38%,'+g.bg[0]+','+g.bg[1]+' 78%)'}
-  var PACKS=[
-    {s:50},{s:100},{s:250,hit:true},{s:500},{s:1000,disc:5},{s:2500,disc:8},{s:5000,disc:10}
-  ];
 
   var fmt = function(n,d){return n.toLocaleString("ru-RU",{maximumFractionDigits:d==null?0:d})};
   var $ = function(id){return document.getElementById(id)};
@@ -367,7 +391,38 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
       if(u&&u.first_name)$("hello").textContent="Привет, "+u.first_name+"!";
     }catch(e){}
   }
-  $("rateVal").textContent=fmt(RATE)+" ₽";
+
+  /* Курс TON */
+  function applyRate(market,ts){
+    MARKET=market;RATE=Math.floor(market*(1-TON_DISCOUNT));
+    $("rateVal").textContent=fmt(RATE)+" ₽";$("rateDot").style.background="";
+    $("tonMarket").textContent=fmt(MARKET,2)+" ₽";
+    $("tonOur").textContent=fmt(RATE)+" ₽";
+    $("tonUpd").textContent=new Date(ts).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+    updTon();
+  }
+  function getJSON(u){return fetch(u,{cache:"no-store"}).then(function(r){if(!r.ok)throw r.status;return r.json()})}
+  function fetchMarket(){
+    // 1) CoinGecko TON/RUB; 2) запасной: Binance TON/USDT × курс доллара ЦБ РФ
+    return getJSON("https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=rub")
+      .then(function(d){var v=d["the-open-network"].rub;if(!(v>0))throw 0;return v})
+      .catch(function(){
+        return Promise.all([
+          getJSON("https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT"),
+          getJSON("https://www.cbr-xml-daily.ru/daily_json.js")
+        ]).then(function(r){var v=parseFloat(r[0].price)*r[1].Valute.USD.Value;if(!(v>0))throw 0;return v});
+      });
+  }
+  function refreshRate(force){
+    var c=null;try{c=JSON.parse(localStorage.getItem("nova_ton_rate")||"null")}catch(e){}
+    if(c&&c.v>0){applyRate(c.v,c.t);if(!force&&Date.now()-c.t<RATE_TTL)return}
+    fetchMarket().then(function(v){
+      var t=Date.now();try{localStorage.setItem("nova_ton_rate",JSON.stringify({v:v,t:t}))}catch(e){}
+      applyRate(v,t);
+    }).catch(function(){
+      if(!MARKET){$("rateVal").textContent="нет связи";$("rateDot").style.background="#E5484D";updateBuy()}
+    });
+  }
 
   /* NFT */
   function renderGifts(){
@@ -394,26 +449,44 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     var b=e.target.closest(".gift");if(!b)return;
     haptic();var g=GIFTS[+b.dataset.i];
     openSheet([["Подарок",g.n+" #"+fmt(g.no)],["Получатель","ваш аккаунт"]],
-      fmt(g.p,1)+" TON",fmt(g.p*RATE)+" ₽",g);
+      fmt(g.p,1)+" TON",MARKET?fmt(g.p*MARKET)+" ₽":null,g);
   });
 
   /* Stars */
-  function packPrice(p){return Math.round(p.s*STAR_RUB*(1-(p.disc||0)/100))}
+  function tierOf(n){for(var i=STAR_TIERS.length-1;i>=0;i--)if(n>=STAR_TIERS[i].from)return i;return 0}
+  function starVal(){var v=parseInt(String($("starAmt").value).replace(/\D/g,""),10);return isFinite(v)?v:0}
+  function starPrice(n){return Math.round(n*STAR_TIERS[tierOf(n)].rub*100)/100}
+  // ползунок в логарифмической шкале: 100 … 100 000
+  function toRange(n){return Math.round(Math.log(Math.max(STAR_MIN,Math.min(STAR_MAX,n))/STAR_MIN)/Math.log(STAR_MAX/STAR_MIN)*1000)}
+  function fromRange(r){var n=STAR_MIN*Math.pow(STAR_MAX/STAR_MIN,r/1000);var step=n<1000?10:n<10000?100:1000;return Math.round(n/step)*step}
   function renderPacks(){
-    $("packs").innerHTML=PACKS.map(function(p,i){
-      var full=Math.round(p.s*STAR_RUB);
-      return '<button class="pack" data-i="'+i+'" style="--i:'+i+'" aria-pressed="'+(i===state.pack)+'">'+
+    var cur=starVal()>=STAR_MIN?tierOf(starVal()):-1;
+    $("packs").innerHTML=STAR_TIERS.map(function(t,i){
+      return '<button class="pack" data-i="'+i+'" style="--i:'+i+'" aria-pressed="'+(i===cur)+'">'+
         '<span class="stack">'+STAR_SVG+'</span>'+
-        '<span><span class="amt num">'+fmt(p.s)+' звёзд</span>'+(p.hit?'<span class="tag">ХИТ</span>':'')+(p.disc?'<span class="tag">−'+p.disc+'%</span>':'')+
-        '<br><span class="per num">'+fmt(packPrice(p)/p.s,2)+' ₽ за звезду</span></span>'+
-        '<span class="cost num"><b>'+fmt(packPrice(p))+' ₽</b>'+(p.disc?'<s>'+fmt(full)+' ₽</s>':'')+'</span></button>';
+        '<span><span class="amt num">'+fmt(t.rub,2)+' ₽ за звезду</span>'+(i===STAR_TIERS.length-1?'<span class="tag">ВЫГОДНО</span>':'')+
+        '<br><span class="range num">'+(i===STAR_TIERS.length-1?'от '+fmt(t.from)+' до '+fmt(t.to):'от '+fmt(t.from)+' до '+fmt(t.to))+' звёзд</span></span>'+
+        '<span class="cost num"><b>'+fmt(Math.round(t.from*t.rub))+' ₽</b><s style="text-decoration:none">за '+fmt(t.from)+'</s></span></button>';
     }).join("");
   }
+  var lastTier=-2;
+  function updStars(fromSlider){
+    var n=starVal(),ok=n>=STAR_MIN&&n<=STAR_MAX;
+    $("starRub").textContent=ok?fmt(starPrice(n),2)+" ₽":"—";
+    $("starPer").textContent=ok?fmt(STAR_TIERS[tierOf(n)].rub,2)+" ₽ за звезду":(n>STAR_MAX?"максимум "+fmt(STAR_MAX):"минимум "+fmt(STAR_MIN)+" звёзд");
+    if(!fromSlider)$("starRange").value=toRange(n);
+    var t=ok?tierOf(n):-1;
+    if(t!==lastTier){lastTier=t;[].forEach.call($("packs").children,function(c,i){c.style.animation="none";c.setAttribute("aria-pressed",i===t)});if(t>=0)haptic("sel")}
+    updateBuy();
+  }
+  $("starAmt").addEventListener("input",function(){updStars(false)});
+  $("starRange").addEventListener("input",function(){$("starAmt").value=fromRange(+this.value);updStars(true)});
+  $("starQuick").addEventListener("click",function(e){
+    var b=e.target.closest("button");if(!b)return;$("starAmt").value=b.dataset.v;haptic("sel");updStars(false);
+  });
   $("packs").addEventListener("click",function(e){
     var b=e.target.closest(".pack");if(!b)return;
-    state.pack=+b.dataset.i;haptic("sel");
-    [].forEach.call(this.children,function(c){c.setAttribute("aria-pressed",c===b);c.style.animation="none"});
-    updateBuy();
+    $("starAmt").value=STAR_TIERS[+b.dataset.i].from;updStars(false);
   });
   $("starsWho").addEventListener("click",function(e){
     var b=e.target.closest("button");if(!b)return;
@@ -427,6 +500,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   function tonVal(){var v=parseFloat(String($("tonAmt").value).replace(",","."));return isFinite(v)&&v>0?v:0}
   var shown=0,raf;
   function updTon(){
+    if(!RATE){$("tonRub").textContent="курс загружается…";updateBuy();return}
     var to=tonVal()*RATE,from=shown,t0=performance.now();cancelAnimationFrame(raf);
     (function step(t){var k=Math.min(1,(t-t0)/450);k=1-Math.pow(1-k,3);shown=from+(to-from)*k;
       $("tonRub").textContent=fmt(shown)+" ₽";if(k<1)raf=requestAnimationFrame(step)})(t0);
@@ -453,23 +527,25 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   var buyAction=null;
   function updateBuy(){
     var label=null,price="",gold=false;
-    if(state.tab==="stars"){var p=PACKS[state.pack];label="Купить "+fmt(p.s)+" звёзд";price=fmt(packPrice(p))+" ₽";gold=true;
+    if(state.tab==="stars"){var n=starVal(),ok=n>=STAR_MIN&&n<=STAR_MAX;label="Купить "+fmt(n)+" звёзд";price=ok?fmt(starPrice(n),2)+" ₽":"";gold=true;
       buyAction=function(){
+        if(!ok){toast("Можно купить от "+fmt(STAR_MIN)+" до "+fmt(STAR_MAX)+" звёзд");$("starAmt").focus();return}
         var to=state.who==="friend"?($("starsUser").value.trim()):"";
         if(state.who==="friend"&&!to){toast("Укажите username получателя");$("starsUser").focus();return}
-        openSheet([["Товар",fmt(p.s)+" Telegram Stars"],["Получатель",to?"@"+to.replace(/^@/,""):"ваш аккаунт"]],price,null);
+        openSheet([["Товар",fmt(n)+" Telegram Stars"],["Цена за звезду",fmt(STAR_TIERS[tierOf(n)].rub,2)+" ₽"],["Получатель",to?"@"+to.replace(/^@/,""):"ваш аккаунт"]],price,null);
       }}
-    else if(state.tab==="ton"){var v=tonVal();label="Купить "+fmt(v,2)+" TON";price=fmt(v*RATE)+" ₽";
+    else if(state.tab==="ton"){var v=tonVal();label="Купить "+fmt(v,2)+" TON";price=RATE?fmt(v*RATE)+" ₽":"";
       buyAction=function(){
+        if(!RATE){toast("Курс ещё загружается, попробуйте через пару секунд");refreshRate(true);return}
         if(v<1){toast("Минимальная сумма 1 TON");return}
         var w=$("tonWallet").value.trim();
         if(w.length<20){toast("Вставьте адрес кошелька TON");$("tonWallet").focus();return}
-        openSheet([["Товар",fmt(v,2)+" TON"],["Кошелёк",w.slice(0,6)+"…"+w.slice(-4)],["Курс","1 TON ≈ "+fmt(RATE)+" ₽"]],price,null);
+        openSheet([["Товар",fmt(v,2)+" TON"],["Кошелёк",w.slice(0,6)+"…"+w.slice(-4)],["Курс","1 TON = "+fmt(RATE)+" ₽"]],price,null);
       }}
     var show=!!label&&!$("sheet").classList.contains("on");
     if(tg&&tg.MainButton&&tg.platform!=="unknown"){
       try{
-        if(show){tg.MainButton.setParams({text:label+" · "+price,color:gold?"#F6B940":"#1AA3F0",text_color:gold?"#231800":"#FFFFFF",is_visible:true})}
+        if(show){tg.MainButton.setParams({text:label+(price?" · "+price:""),color:gold?"#F6B940":"#1AA3F0",text_color:gold?"#231800":"#FFFFFF",is_visible:true})}
         else tg.MainButton.hide();
       }catch(e){}
       $("buyBar").hidden=true;
@@ -565,7 +641,10 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     var b=e.target.closest(".tab");if(!b)return;haptic("sel");setTab(b.dataset.tab);
   });
 
-  renderGifts();renderPacks();renderNotify();shown=tonVal()*RATE;updTon();
+  renderGifts();renderPacks();renderNotify();updStars(false);updTon();
+  refreshRate(false);
+  setInterval(function(){refreshRate(true)},RATE_TTL);
+  document.addEventListener("visibilitychange",function(){if(!document.hidden)refreshRate(false)});
   var h=(location.hash||"").slice(1);
   setTab(["nft","stars","ton","premium"].indexOf(h)>-1?h:"nft");
 })();
