@@ -164,6 +164,16 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 /* real gift art */
 .art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s}
 .art.real{background:var(--surface-2)!important}
+.art .no,.art .rar{z-index:3}
+/* живые подарки: лёгкое покачивание + мерцающие звёздочки */
+.art img.ok{animation:sway 6s ease-in-out infinite;animation-delay:calc(var(--i,0)*-.9s)}
+.art .glyph{animation:sway2 5s ease-in-out infinite;animation-delay:calc(var(--i,0)*-.9s)}
+@keyframes sway{0%,100%{transform:scale(1.07) translateY(0) rotate(0)}25%{transform:scale(1.08) translateY(-2%) rotate(-1deg)}50%{transform:scale(1.07) translateY(0) rotate(0)}75%{transform:scale(1.08) translateY(-1.2%) rotate(1deg)}}
+@keyframes sway2{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-6px) rotate(3deg)}}
+.spark{position:absolute;z-index:2;width:var(--s,8px);height:var(--s,8px);left:var(--x);top:var(--y);background:#fff;pointer-events:none;opacity:0;
+  clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);
+  animation:twinkle var(--d,3s) ease-in-out infinite;animation-delay:var(--dl,0s);filter:drop-shadow(0 0 2px rgba(255,255,255,.8))}
+@keyframes twinkle{0%,100%{opacity:0;transform:scale(.3) rotate(0)}50%{opacity:var(--o,.45);transform:scale(1) rotate(45deg)}}
 .art img.ok{opacity:1}
 .art img.ok+.glyph{display:none}
 .gift{animation:rise .45s both;animation-delay:calc(var(--i,0)*45ms)}
@@ -372,6 +382,11 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     {n:"Spy Agaric",slug:"spyagaric",no:41870,p:5.4,g:"🍄",bg:["#D35C5C","#5C1B1B"],isNew:true}
   ];
   function artImg(g){return '<img alt="" loading="lazy" src="'+FRAG+g.slug+"-"+g.no+'.webp" onload="this.classList.add(\'ok\');this.parentNode.classList.add(\'real\')" onerror="this.remove()">'}
+  function sparks(n){
+    var h="";for(var i=0;i<n;i++){
+      h+='<i class="spark" style="--x:'+(6+Math.random()*84).toFixed(1)+'%;--y:'+(6+Math.random()*84).toFixed(1)+'%;--s:'+(5+Math.random()*6).toFixed(1)+'px;--d:'+(2.4+Math.random()*2.6).toFixed(2)+'s;--dl:'+(-Math.random()*5).toFixed(2)+'s;--o:'+(.25+Math.random()*.3).toFixed(2)+'"></i>';
+    }return h;
+  }
   function artBg(g){return 'background:radial-gradient(circle at 50% 38%,'+g.bg[0]+','+g.bg[1]+' 78%)'}
 
   var fmt = function(n,d){return n.toLocaleString("ru-RU",{maximumFractionDigits:d==null?0:d})};
@@ -434,7 +449,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
       return '<button class="gift" data-i="'+i+'" style="--i:'+k+'">'+
         '<div class="art" style="'+artBg(g)+'">'+
         '<span class="no num">#'+fmt(g.no)+'</span>'+(g.rare?'<span class="rar">RARE</span>':'')+
-        artImg(g)+'<span class="glyph" aria-hidden="true">'+g.g+'</span></div>'+
+        artImg(g)+'<span class="glyph" aria-hidden="true">'+g.g+'</span>'+sparks(6)+'</div>'+
         '<div class="meta"><span class="name">'+g.n+'</span><span class="model">Коллекция Telegram</span>'+
         '<span class="price num">'+TON_SVG+fmt(g.p,1)+'</span></div></button>';
     }).join("");
@@ -562,7 +577,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   var anim=null;
   function openSheet(lines,total,sub,g){
     if(anim){try{anim.destroy()}catch(e){}anim=null}
-    var art=g?'<div class="sheet-art" style="'+artBg(g)+'">'+artImg(g)+'<span class="glyph">'+g.g+'</span><div class="lottie" id="lot"></div></div>':"";
+    var art=g?'<div class="sheet-art art" style="'+artBg(g)+'">'+artImg(g)+'<span class="glyph">'+g.g+'</span><div class="lottie" id="lot"></div>'+sparks(8)+'</div>':"";
     $("sheetLines").innerHTML=art+lines.map(function(l){return '<div><span>'+l[0]+'</span><b>'+escapeHtml(l[1])+'</b></div>'}).join("")+
       '<div class="total num"><span>Итого</span><span>'+total+(sub?' <small style="color:var(--muted);font-weight:500">≈ '+sub+'</small>':'')+'</span></div>';
     $("scrim").classList.add("on");$("sheet").classList.add("on");updateBuy();
