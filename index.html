@@ -146,6 +146,7 @@ h1{font:700 22px/1.2 var(--display);margin:4px 0 4px;text-wrap:balance;letter-sp
 .scrim.on{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--surface);border-radius:22px 22px 0 0;border-top:1px solid var(--line);padding:10px 16px calc(18px + env(safe-area-inset-bottom,0px));transform:translateY(105%);transition:transform .25s ease}
 .sheet.on{transform:none}
+.sheet{max-height:92vh;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain}
 .sheet .in{max-width:488px;margin:0 auto}
 .grab{width:40px;height:4px;border-radius:4px;background:var(--line);margin:0 auto 14px}
 .sheet h2{font:700 18px/1.2 var(--display);margin:0 0 12px}
