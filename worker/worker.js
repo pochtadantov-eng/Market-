@@ -31,8 +31,7 @@ export default {
 
       // Публично: список подарков
       if (request.method === "GET" && path === "/gifts") {
-        const gifts = await env.DB.get("gifts", "json");
-        return json({ gifts: gifts ?? null });
+        return json({ gifts: await loadGifts(env, origin) });
       }
 
       // Дальше только с подписью Telegram
@@ -95,16 +94,22 @@ export default {
         const body = await request.json().catch(() => ({}));
         const gift = parseGift(body);
         if (!gift) return json({ error: "Нужна ссылка вида t.me/nft/PlushPepe-1843 и цена в TON больше нуля" }, 400);
-        const gifts = (await env.DB.get("gifts", "json")) || [];
+        const gifts = await loadGifts(env, origin);
         const i = gifts.findIndex((g) => g.id === gift.id);
         if (i >= 0) gifts[i] = gift; else gifts.unshift(gift);
         await env.DB.put("gifts", JSON.stringify(gifts));
         return json({ ok: true, gift, gifts });
       }
 
+      // Вернуть витрину из gifts.json на сайте (заменяет текущий список)
+      if (request.method === "POST" && path === "/admin/gifts/restore") {
+        const gifts = await loadGifts(env, origin, true);
+        return json({ ok: true, gifts });
+      }
+
       const del = path.match(/^\/admin\/gifts\/([a-z0-9]+-\d+)$/);
       if (request.method === "DELETE" && del) {
-        const gifts = ((await env.DB.get("gifts", "json")) || []).filter((g) => g.id !== del[1]);
+        const gifts = (await loadGifts(env, origin)).filter((g) => g.id !== del[1]);
         await env.DB.put("gifts", JSON.stringify(gifts));
         return json({ ok: true, gifts });
       }
@@ -169,6 +174,22 @@ async function fragmentFloor(slug) {
     return m ? Number(m[1].replace(/,/g, "")) : 0;
   }).filter((n) => n > 0);
   return prices.length ? Math.min(...prices) : null;
+}
+
+// Список подарков магазина. Пока в базе пусто (null), берём витрину из gifts.json на сайте
+// и сохраняем её, чтобы удаление и добавление работали с тем, что видят покупатели.
+async function loadGifts(env, origin, force) {
+  if (!force) {
+    const saved = await env.DB.get("gifts", "json");
+    if (saved) return saved;
+  }
+  let list = [];
+  try {
+    const res = await fetch(env.GIFTS_URL || origin + "/Market-/gifts.json", { cf: { cacheTtl: 0 } });
+    if (res.ok) list = (await res.json()).map(parseGift).filter(Boolean);
+  } catch {}
+  if (list.length) await env.DB.put("gifts", JSON.stringify(list));
+  return list;
 }
 
 function adminIds(env) {

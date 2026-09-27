@@ -821,7 +821,7 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
   function renderAdminList(){
     $("aList").innerHTML=GIFTS.length?GIFTS.map(function(g){
       return '<div class="aitem"><img alt="" src="'+FRAG+g.slug+"-"+g.no+'.webp" onerror="this.style.visibility=\'hidden\'"><div><b>'+escapeHtml(g.n)+' #'+g.no+'</b><small class="num">'+fmt(g.p,2)+' TON'+(g.rare?' · редкий':'')+(g.isNew?' · новый':'')+'</small></div><button type="button" data-del="'+g.slug+"-"+g.no+'">Удалить</button></div>';
-    }).join(""):'<p class="empty">Пока пусто</p>';
+    }).join(""):'<p class="empty">Пока пусто</p><button type="button" class="pay" id="aRestore">Вернуть подарки витрины</button>';
   }
   $("admTabs").addEventListener("click",function(e){
     var b=e.target.closest("button");if(!b)return;haptic("sel");
@@ -893,6 +893,8 @@ section[role=tabpanel]:not([hidden]){animation:fade .3s both}
     }).catch(function(err){toast(err.message)}).then(function(){$("aAdd").disabled=false});
   });
   $("aList").addEventListener("click",function(e){
+    if(e.target.id==="aRestore"){e.target.disabled=true;
+      api("POST","/admin/gifts/restore").then(function(d){useGiftList(d.gifts);toast(d.gifts.length?"Вернул "+d.gifts.length+" подарков":"Не удалось загрузить витрину")}).catch(function(err){toast(err.message);e.target.disabled=false});return}
     var b=e.target.closest("button[data-del]");if(!b)return;
     if(!b.classList.contains("sure")){b.classList.add("sure");b.textContent="Точно?";setTimeout(function(){b.classList.remove("sure");b.textContent="Удалить"},3000);return}
     api("DELETE","/admin/gifts/"+b.dataset.del).then(function(d){useGiftList(d.gifts);toast("Удалено")}).catch(function(err){toast(err.message)});
