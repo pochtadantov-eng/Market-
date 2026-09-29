@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>
+// Актуальная версия магазина живёт на novamarketsbot. Старая ссылка GitHub Pages перекидывает туда,
+// сохраняя параметры Telegram (#tgWebAppData), чтобы вход через бота продолжал работать.
+// Проверка домена исключает зацикливание, если эту страницу откроют с другого адреса.
+if(location.hostname==="pochtadantov-eng.github.io")location.replace("https://novamarketsbot.inarmine2009.workers.dev/"+location.search+location.hash);
+</script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <title>Nova Market</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
