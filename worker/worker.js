@@ -6,7 +6,8 @@
 //   BOT_TOKEN   секрет, токен бота от @BotFather
 //   ADMIN_IDS   Telegram ID админов через запятую, например 123456789
 //   DB          привязка KV namespace
-//   ALLOWED_ORIGIN  (необязательно) адрес мини-приложения, по умолчанию https://pochtadantov-eng.github.io
+//   ALLOWED_ORIGIN  (необязательно) адреса мини-приложения через запятую,
+//                   по умолчанию https://novamarketsbot.inarmine2009.workers.dev и https://pochtadantov-eng.github.io
 
 const MAX_AUTH_AGE = 24 * 60 * 60; // initData действительна сутки
 const FLOOR_DISCOUNT = 0.2; // цена подарка = флор минус 20%
@@ -18,13 +19,18 @@ const STAR_MIN = 100, STAR_MAX = 100000;
 const STAR_TIERS = [ { from: 100, rub: 1.3 }, { from: 500, rub: 1.1 }, { from: 2000, rub: 1.0 }, { from: 10000, rub: 0.9 } ];
 const PRICE_SLACK = 0.03; // если цена выросла больше чем на 3% с того, что видел покупатель, просим подтвердить заново
 const FRAG = "https://nft.fragment.com/gift/";
+const PAGES = "https://pochtadantov-eng.github.io"; // отсюда берётся запасной gifts.json
+const APP_ORIGINS = ["https://novamarketsbot.inarmine2009.workers.dev", PAGES];
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36";
 
 export default {
   async fetch(request, env, ctx) {
-    const origin = env.ALLOWED_ORIGIN || "https://pochtadantov-eng.github.io";
+    const allowed = env.ALLOWED_ORIGIN ? env.ALLOWED_ORIGIN.split(",").map((s) => s.trim().replace(/\/+$/, "")) : APP_ORIGINS;
+    const reqOrigin = request.headers.get("Origin");
+    const origin = allowed.includes(reqOrigin) ? reqOrigin : allowed[0];
     const cors = {
       "Access-Control-Allow-Origin": origin,
+      "Vary": "Origin",
       "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type,X-Init-Data",
       "Access-Control-Max-Age": "86400",
@@ -480,7 +486,7 @@ async function loadGifts(env, origin, force) {
   }
   let list = [];
   try {
-    const res = await fetch(env.GIFTS_URL || origin + "/Market-/gifts.json", { cf: { cacheTtl: 0 } });
+    const res = await fetch(env.GIFTS_URL || PAGES + "/Market-/gifts.json", { cf: { cacheTtl: 0 } });
     if (res.ok) list = (await res.json()).map(parseGift).filter(Boolean);
   } catch {}
   if (list.length) await env.DB.put("gifts", JSON.stringify(list));

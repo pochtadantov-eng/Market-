@@ -1,0 +1,8 @@
+// Мини-приложение на Cloudflare: воркер novamarketsbot раздаёт index.html и gifts.json из этого репозитория.
+// Подключение: Cloudflare → Workers & Pages → novamarketsbot → Settings → Build → Connect → этот репозиторий, ветка main.
+// Сервер (API, балансы, админка) остаётся отдельным воркером, его код в worker/worker.js.
+{
+  "name": "novamarketsbot",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "./" }
+}

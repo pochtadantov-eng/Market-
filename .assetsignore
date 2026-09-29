@@ -1,0 +1,9 @@
+.git
+.github
+.claude
+worker
+wrangler.jsonc
+README.md
+node_modules
+.wrangler
+.nojekyll
